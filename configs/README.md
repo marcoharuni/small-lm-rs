@@ -1,12 +1,13 @@
 # Configuration
 
-`model.json` is the frozen architecture contract shared by JAX and Rust.
+`model.json` is the architecture contract shared by JAX and Rust.
 
-Resolved executable training profiles are in `configs/training/`:
+Training profiles are in `configs/training/`:
 
-- `smoke.json` — 16,384 train tokens
-- `pilot_l4.json` — 20M train tokens
-- `full_l4.json` — 1.6B train + 10M validation tokens
-- `sft_l4.json` — 70k selected SmolTalk examples
+- `smoke.json` — quick pipeline test
+- `onehour_probe.json` — throughput probe
+- `onehour_final.json` — released base training run
+- `onehour_sft.json` — released instruction-tuning run
+- `pilot_l4.json`, `full_l4.json`, `sft_l4.json` — earlier development/planning profiles
 
-The old unresolved scaffold `tokenizer.json`, `pretrain.json`, and `sft.json` files have been removed so there is only one set of training decisions.
+The released weights were produced from `onehour_final.json` followed by `onehour_sft.json`.
