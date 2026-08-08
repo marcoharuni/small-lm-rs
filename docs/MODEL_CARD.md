@@ -1,29 +1,32 @@
-# Model Card: NileMini-8M-SiTU
+# Bundled 8M model
 
-## Status
-
-NileMini-8M-SiTU is an implemented **training + inference project whose final training run is still pending**. The repository's checked-in artifact is a smoke/parity artifact; it is not the final 1.6B-token + SFT model.
+The repository includes a trained 7,999,744-parameter decoder model used to develop and validate the Rust inference path.
 
 ## Architecture
 
-18-layer, 640-wide causal decoder; 1,664-wide SiTU-GLU FFN; 10 query / 2 KV heads; RoPE; RMSNorm; tied 8,192-token embeddings; 512-token context; exactly 7,999,744 parameters.
+- 8 transformer layers
+- hidden size 256
+- FFN size 704
+- 4 query heads / 2 KV heads
+- 8,192-token vocabulary
+- 512-token context
+- RMSNorm, RoPE, grouped-query attention, bounded gated FFN
+- tied token embeddings
 
-## Planned training
+## Training
 
-- FineWeb-Edu: 1.6B training tokens + 10M deterministic held-out validation tokens
-- SmolTalk: 70k selected conversations = 68k train + 2k validation
-- JAX/Flax NNX, Muon + AdamW, FP32 parameters / BF16 matmuls
+Base pretraining used 140,017,664 FineWeb-Edu training tokens and 262,144 validation tokens. The final base validation loss was 3.8659 (perplexity 47.74).
 
-The source revisions and processing rules are in [DATA_CARD.md](DATA_CARD.md).
+The instruction-tuning pass used 448 SmolTalk training examples and 64 validation examples, with final validation loss 2.6459.
+
+See `TRAINING.md` and `DATA_CARD.md` for data and optimizer details.
 
 ## Intended use
 
-This project demonstrates end-to-end small-language-model engineering: reproducible training, export, independent Rust inference, KV caching, sampling, cross-language parity, and an OpenAI-shaped local API. Any future public trained artifact needs a revision-specific evaluation and safety review.
+This model is mainly a test bed for training/export/runtime work. Its small parameter count and limited instruction-tuning set make it unsuitable as a strong general-purpose assistant.
 
-## Current evidence
+## Runtime validation
 
-Engineering parity and server behavior are measured on the smoke artifact. No claim is made yet about final language quality, factuality, safety, bias, memorization, or benchmark performance because the full pretraining/SFT run has not happened.
+The exported JAX reference and Rust implementation agree on all 10 reference top-1 predictions. The complete parity report is in `parity.md` and `parity_report.json`.
 
-## Release gate
-
-A final release should include the full-run configuration/lineage, held-out metrics, SafeTensors/tokenizer checksums, final JAX↔Rust parity, example generations, performance measurements with hardware provenance, and safety/licensing review.
+The artifact keeps the model ID `nilemini-8m-situ` for compatibility with its exported manifest and tests.
