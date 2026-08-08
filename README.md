@@ -2,9 +2,33 @@
 
 [![CI](https://github.com/marcoharuni/nilemini-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/marcoharuni/nilemini-rs/actions/workflows/ci.yml)
 
-**NileMini-8M-SiTU** is a **7,999,744-parameter decoder-only language model** trained in JAX/Flax NNX and served by an independent Rust CPU inference engine.
+**NileMini-8M-SiTU** is a **7,999,744-parameter decoder-only language model** trained in JAX/Flax NNX and executed by an independent Rust CPU inference engine.
 
-The repository contains the complete v1.0.0 release: training code, frozen tokenizer, trained FP32 SafeTensors weights, JAX reference outputs, Rust inference, KV-cached generation, sampling, and an OpenAI-compatible HTTP API.
+The repository contains the complete trained release: deterministic data/training code, frozen tokenizer, FP32 SafeTensors weights, JAX reference outputs, Rust Transformer inference, KV-cached generation, sampling, a browser chat UI, and an OpenAI-compatible HTTP API.
+
+## Chat with NileMini
+
+Clone the repository and start the Rust server:
+
+```bash
+git clone https://github.com/marcoharuni/nilemini-rs.git
+cd nilemini-rs
+
+cargo run --release -p nilemini-server -- \
+  --model-dir artifacts/nilemini-8m-situ \
+  --host 127.0.0.1 \
+  --port 8080
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8080/
+```
+
+The browser interface is served directly by the Rust binary and talks to the same `/v1/chat/completions` endpoint as API clients. No Node.js frontend or second web server is required.
+
+> NileMini is intentionally tiny. The 8M-parameter scale and small SFT pass make this primarily a language-model systems/reproducibility project, not a frontier chat model.
 
 ## Release results
 
@@ -97,7 +121,7 @@ See [`docs/TRAINING.md`](docs/TRAINING.md) and [`docs/MODAL_TRAINING.md`](docs/M
 
 ## Trained artifact
 
-The final v1.0.0 package is checked in at:
+The trained package is checked in at:
 
 ```text
 artifacts/nilemini-8m-situ/
@@ -113,7 +137,7 @@ artifacts/nilemini-8m-situ/
 
 The exported model contains **74 tensors**, **7,999,744 parameters**, and **30.52 MiB** of FP32 weights.
 
-Verify the artifact:
+Verify it:
 
 ```bash
 cd artifacts/nilemini-8m-situ
@@ -144,18 +168,9 @@ cargo run --release -p nilemini-engine --example parity -- \
 
 See [`docs/parity.md`](docs/parity.md).
 
-## Rust inference server
+## OpenAI-compatible API
 
-Start the trained model locally:
-
-```bash
-cargo run --release -p nilemini-server -- \
-  --model-dir artifacts/nilemini-8m-situ \
-  --host 127.0.0.1 \
-  --port 8080
-```
-
-Endpoints:
+The same Rust server exposes:
 
 - `GET /health`
 - `GET /v1/models`
@@ -198,8 +213,9 @@ src/nilemini/export.py         FP32 SafeTensors export
 src/nilemini/reference.py      Independent NumPy reference math
 infra/modal_train.py           Modal L4 workflow
 rust/engine/                   Independent Rust CPU inference engine
-rust/server/                   OpenAI-compatible HTTP/SSE server
-artifacts/nilemini-8m-situ/    Final trained v1.0.0 artifact
+rust/server/                   OpenAI-compatible API + browser chat
+artifacts/nilemini-8m-situ/    Final trained artifact
+docs/DEMO.md                   Short demo/video walkthrough
 ```
 
 ## Verification
@@ -232,17 +248,22 @@ cargo run --release -p nilemini-engine --example parity -- \
 
 Some expensive real-artifact integration tests are intentionally ignored in the default debug test suite and document their release-mode requirements. The explicit parity command above exercises the final trained artifact in release mode.
 
+## Demo
+
+A 3–5 minute reproducible presentation flow is in [`docs/DEMO.md`](docs/DEMO.md): artifact checksum → JAX/Rust parity → Rust server → browser chat → API request.
+
 ## Scope
 
-NileMini is intentionally small. The project is an end-to-end language-model systems implementation focused on:
+NileMini is an end-to-end language-model systems implementation focused on:
 
 1. training from a frozen architecture contract,
 2. deterministic data preparation and checkpointing,
 3. framework-independent SafeTensors export,
 4. independent Rust inference,
 5. numerical JAX ↔ Rust validation,
-6. KV-cached autoregressive generation and sampling, and
-7. OpenAI-compatible serving.
+6. KV-cached autoregressive generation and sampling,
+7. browser-based local chat, and
+8. OpenAI-compatible serving.
 
 Model quality is constrained by the **8M parameter scale** and the small SFT set. The repository emphasizes reproducibility, measured results, and systems correctness rather than frontier-model capability.
 
