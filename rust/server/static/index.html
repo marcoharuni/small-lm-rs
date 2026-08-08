@@ -1,348 +1,215 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="color-scheme" content="dark" />
-  <title>NileMini-8M-SiTU</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NileMini</title>
   <style>
-    :root {
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #edf2f7;
-      background: #07111f;
-      font-synthesis: none;
-    }
-
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      min-height: 100vh;
-      background:
-        radial-gradient(circle at 20% 0%, rgba(35, 103, 160, 0.22), transparent 34rem),
-        radial-gradient(circle at 100% 100%, rgba(54, 153, 126, 0.14), transparent 30rem),
-        #07111f;
+      background: #f5f5f5;
+      color: #222;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
-    button, textarea, input { font: inherit; }
-
-    .shell {
-      width: min(980px, calc(100% - 28px));
-      min-height: 100vh;
-      margin: 0 auto;
-      padding: 26px 0;
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      gap: 16px;
-    }
-
-    header, .chat, .composer {
-      border: 1px solid rgba(148, 163, 184, 0.18);
-      background: rgba(8, 20, 35, 0.84);
-      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28);
-      backdrop-filter: blur(18px);
+    .page {
+      width: min(720px, calc(100% - 24px));
+      margin: 32px auto;
     }
 
     header {
-      border-radius: 22px;
-      padding: 18px 20px;
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      gap: 18px;
+      align-items: baseline;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #d8d8d8;
     }
 
-    .brand { display: flex; align-items: center; gap: 13px; }
-
-    .mark {
-      width: 42px;
-      height: 42px;
-      border-radius: 13px;
-      display: grid;
-      place-items: center;
-      font-weight: 800;
-      letter-spacing: -0.05em;
-      color: #07111f;
-      background: linear-gradient(135deg, #7dd3fc, #6ee7b7);
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
     }
 
-    h1 { margin: 0; font-size: 1.03rem; letter-spacing: -0.01em; }
-    .subtitle { margin-top: 4px; color: #8ea0b7; font-size: 0.82rem; }
-
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      color: #aab8c8;
-      font-size: 0.82rem;
-      white-space: nowrap;
+    #status {
+      font-size: 13px;
+      color: #777;
     }
 
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #f59e0b;
-      box-shadow: 0 0 12px rgba(245, 158, 11, 0.65);
+    #status.ready { color: #247a3c; }
+
+    #chat {
+      min-height: 420px;
+      max-height: 65vh;
+      overflow-y: auto;
+      padding: 24px 0 12px;
     }
 
-    .status.ready .dot {
-      background: #34d399;
-      box-shadow: 0 0 12px rgba(52, 211, 153, 0.65);
+    .empty {
+      color: #888;
+      font-size: 14px;
+      padding-top: 20px;
     }
-
-    .chat {
-      min-height: 52vh;
-      max-height: calc(100vh - 280px);
-      overflow: auto;
-      border-radius: 22px;
-      padding: 24px;
-      scroll-behavior: smooth;
-    }
-
-    .welcome {
-      min-height: 100%;
-      display: grid;
-      place-items: center;
-      text-align: center;
-      color: #9aacc1;
-      padding: 40px 18px;
-    }
-
-    .welcome strong {
-      display: block;
-      color: #e7eef6;
-      font-size: clamp(1.3rem, 3vw, 2rem);
-      margin-bottom: 10px;
-    }
-
-    .welcome span { display: block; max-width: 520px; line-height: 1.6; }
 
     .message {
-      display: flex;
-      margin: 0 0 18px;
+      margin-bottom: 22px;
+      line-height: 1.5;
+      font-size: 15px;
     }
 
-    .message.user { justify-content: flex-end; }
+    .message strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 13px;
+    }
 
-    .bubble {
-      max-width: min(760px, 88%);
-      padding: 13px 15px;
-      border-radius: 17px;
-      line-height: 1.55;
+    .message.user strong { color: #555; }
+    .message.assistant strong { color: #1769aa; }
+
+    .text {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
 
-    .assistant .bubble {
-      background: #102238;
-      border: 1px solid rgba(125, 211, 252, 0.13);
-      border-top-left-radius: 5px;
-    }
-
-    .user .bubble {
-      color: #05111d;
-      background: linear-gradient(135deg, #8bdcf9, #83e5c2);
-      border-top-right-radius: 5px;
-    }
-
-    .meta {
-      color: #6f8198;
-      font-size: 0.72rem;
-      margin-top: -10px;
-      margin-bottom: 18px;
-    }
+    .error { color: #a22222; }
 
     .composer {
-      border-radius: 22px;
-      padding: 14px;
+      border-top: 1px solid #d8d8d8;
+      padding-top: 14px;
     }
 
     textarea {
       width: 100%;
-      resize: none;
-      min-height: 58px;
-      max-height: 180px;
-      border: 0;
-      outline: 0;
-      color: #eef4fa;
-      background: transparent;
-      padding: 8px 9px 12px;
-      line-height: 1.45;
+      min-height: 74px;
+      resize: vertical;
+      padding: 10px;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      background: #fff;
+      color: #222;
+      font: inherit;
+      outline: none;
     }
 
-    textarea::placeholder { color: #66778d; }
+    textarea:focus { border-color: #777; }
 
-    .controls {
+    .buttons {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      border-top: 1px solid rgba(148, 163, 184, 0.12);
-      padding-top: 12px;
+      margin-top: 8px;
     }
-
-    .settings { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
-
-    label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      color: #8092a8;
-      font-size: 0.75rem;
-    }
-
-    input[type="number"] {
-      width: 64px;
-      color: #dce6ef;
-      background: #0b1a2b;
-      border: 1px solid rgba(148, 163, 184, 0.18);
-      border-radius: 9px;
-      padding: 6px 7px;
-      outline: 0;
-    }
-
-    .actions { display: flex; gap: 8px; }
 
     button {
-      border: 0;
+      padding: 8px 14px;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+      background: #fff;
+      color: #222;
+      font: inherit;
       cursor: pointer;
-      border-radius: 11px;
-      padding: 9px 13px;
-      transition: transform 120ms ease, opacity 120ms ease;
     }
 
-    button:hover { transform: translateY(-1px); }
-    button:disabled { cursor: wait; opacity: 0.55; transform: none; }
+    button:hover { background: #eee; }
+    button:disabled { opacity: 0.55; cursor: default; }
 
-    .secondary {
-      color: #aab8c8;
-      background: #102238;
+    #send {
+      border-color: #222;
+      background: #222;
+      color: #fff;
     }
 
-    .primary {
-      font-weight: 700;
-      color: #05111d;
-      background: linear-gradient(135deg, #8bdcf9, #83e5c2);
+    #send:hover { background: #444; }
+
+    .note {
+      margin-top: 10px;
+      color: #999;
+      font-size: 12px;
     }
 
-    .error { color: #fda4af; }
-
-    @media (max-width: 640px) {
-      .shell { width: min(100% - 16px, 980px); padding: 8px 0; gap: 8px; }
-      header, .chat, .composer { border-radius: 16px; }
-      header { padding: 14px; }
-      .subtitle { display: none; }
-      .chat { padding: 15px; max-height: calc(100vh - 230px); }
-      .controls { align-items: flex-end; }
-      .settings label:nth-child(2) { display: none; }
-      .bubble { max-width: 94%; }
+    @media (max-width: 600px) {
+      .page { margin-top: 16px; }
+      #chat { min-height: 360px; }
     }
   </style>
 </head>
 <body>
-  <main class="shell">
+  <main class="page">
     <header>
-      <div class="brand">
-        <div class="mark">N</div>
-        <div>
-          <h1>NileMini-8M-SiTU</h1>
-          <div class="subtitle">7,999,744 parameters · Rust CPU inference</div>
-        </div>
-      </div>
-      <div id="status" class="status">
-        <span class="dot"></span>
-        <span id="statusText">Checking model…</span>
-      </div>
+      <h1>NileMini</h1>
+      <span id="status">checking...</span>
     </header>
 
-    <section id="chat" class="chat" aria-live="polite">
-      <div id="welcome" class="welcome">
-        <div>
-          <strong>Chat with NileMini</strong>
-          <span>This is the locally served 8M-parameter model. It is intentionally small, so expect compact and sometimes imperfect answers.</span>
-        </div>
-      </div>
+    <section id="chat">
+      <div id="empty" class="empty">Start a conversation.</div>
     </section>
 
     <section class="composer">
-      <textarea id="prompt" rows="2" maxlength="4000" placeholder="Message NileMini…" aria-label="Message"></textarea>
-      <div class="controls">
-        <div class="settings">
-          <label>Tokens <input id="maxTokens" type="number" min="1" max="128" value="32" /></label>
-          <label>Temperature <input id="temperature" type="number" min="0" max="2" step="0.1" value="0" /></label>
-        </div>
-        <div class="actions">
-          <button id="clear" class="secondary" type="button">Clear</button>
-          <button id="send" class="primary" type="button">Send</button>
-        </div>
+      <textarea id="prompt" placeholder="Type a message..." autofocus></textarea>
+      <div class="buttons">
+        <button id="clear" type="button">Clear</button>
+        <button id="send" type="button">Send</button>
       </div>
+      <div class="note">NileMini-8M-SiTU · local Rust inference</div>
     </section>
   </main>
 
   <script>
-    const chat = document.querySelector('#chat');
-    const welcome = document.querySelector('#welcome');
-    const prompt = document.querySelector('#prompt');
-    const send = document.querySelector('#send');
-    const clear = document.querySelector('#clear');
-    const maxTokens = document.querySelector('#maxTokens');
-    const temperature = document.querySelector('#temperature');
-    const status = document.querySelector('#status');
-    const statusText = document.querySelector('#statusText');
+    const chat = document.getElementById('chat');
+    const prompt = document.getElementById('prompt');
+    const send = document.getElementById('send');
+    const clear = document.getElementById('clear');
+    const status = document.getElementById('status');
 
     let model = 'nilemini-8m-situ';
     let messages = [];
 
-    function appendMessage(role, content) {
-      welcome?.remove();
-      const row = document.createElement('div');
-      row.className = `message ${role}`;
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      bubble.textContent = content;
-      row.appendChild(bubble);
-      chat.appendChild(row);
-      chat.scrollTop = chat.scrollHeight;
-      return bubble;
-    }
+    function addMessage(role, content) {
+      document.getElementById('empty')?.remove();
 
-    function appendMeta(text, isError = false) {
-      const meta = document.createElement('div');
-      meta.className = `meta${isError ? ' error' : ''}`;
-      meta.textContent = text;
-      chat.appendChild(meta);
+      const item = document.createElement('div');
+      item.className = `message ${role}`;
+
+      const label = document.createElement('strong');
+      label.textContent = role === 'user' ? 'You' : 'NileMini';
+
+      const text = document.createElement('div');
+      text.className = 'text';
+      text.textContent = content;
+
+      item.append(label, text);
+      chat.appendChild(item);
       chat.scrollTop = chat.scrollHeight;
+      return text;
     }
 
     async function checkHealth() {
       try {
         const response = await fetch('/health');
         const data = await response.json();
-        if (!response.ok || !data.ready) throw new Error('Model is not ready');
+        if (!response.ok || !data.ready) throw new Error();
         model = data.model || model;
+        status.textContent = 'ready';
         status.classList.add('ready');
-        statusText.textContent = `${model} ready`;
-      } catch (error) {
+      } catch {
+        status.textContent = 'offline';
         status.classList.remove('ready');
-        statusText.textContent = 'Model unavailable';
       }
     }
 
     async function submit() {
-      const text = prompt.value.trim();
-      if (!text || send.disabled) return;
+      const content = prompt.value.trim();
+      if (!content || send.disabled) return;
 
-      const userMessage = { role: 'user', content: text };
-      messages.push(userMessage);
-      appendMessage('user', text);
+      messages.push({ role: 'user', content });
+      addMessage('user', content);
       prompt.value = '';
-      prompt.style.height = 'auto';
 
       send.disabled = true;
       clear.disabled = true;
-      send.textContent = 'Thinking…';
-      const pending = appendMessage('assistant', '…');
+      send.textContent = 'Wait...';
+      const answer = addMessage('assistant', '...');
 
       try {
         const response = await fetch('/v1/chat/completions', {
@@ -351,8 +218,8 @@
           body: JSON.stringify({
             model,
             messages,
-            max_tokens: Math.max(1, Math.min(128, Number(maxTokens.value) || 32)),
-            temperature: Math.max(0, Number(temperature.value) || 0),
+            max_tokens: 32,
+            temperature: 0.0,
             top_p: 1.0,
             top_k: 0,
             seed: 0
@@ -364,16 +231,12 @@
           throw new Error(data?.error?.message || `HTTP ${response.status}`);
         }
 
-        const content = data?.choices?.[0]?.message?.content ?? '';
-        pending.textContent = content || '(empty response)';
+        const content = data?.choices?.[0]?.message?.content || '(empty response)';
+        answer.textContent = content;
         messages.push({ role: 'assistant', content });
-
-        if (data.usage) {
-          appendMeta(`prompt ${data.usage.prompt_tokens} · completion ${data.usage.completion_tokens} · total ${data.usage.total_tokens} tokens`);
-        }
       } catch (error) {
-        pending.textContent = `Request failed: ${error.message}`;
-        pending.classList.add('error');
+        answer.textContent = `Error: ${error.message}`;
+        answer.classList.add('error');
         messages.pop();
       } finally {
         send.disabled = false;
@@ -387,24 +250,18 @@
 
     clear.addEventListener('click', () => {
       messages = [];
-      chat.innerHTML = '<div id="welcome" class="welcome"><div><strong>New conversation</strong><span>Send a message to start chatting with NileMini.</span></div></div>';
+      chat.innerHTML = '<div id="empty" class="empty">Start a conversation.</div>';
       prompt.focus();
     });
 
-    prompt.addEventListener('keydown', (event) => {
+    prompt.addEventListener('keydown', event => {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         submit();
       }
     });
 
-    prompt.addEventListener('input', () => {
-      prompt.style.height = 'auto';
-      prompt.style.height = `${Math.min(prompt.scrollHeight, 180)}px`;
-    });
-
     checkHealth();
-    prompt.focus();
   </script>
 </body>
 </html>
