@@ -2,128 +2,250 @@
 
 [![CI](https://github.com/marcoharuni/nilemini-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/marcoharuni/nilemini-rs/actions/workflows/ci.yml)
 
-NileMini is an **7,999,744-parameter** decoder-only language-model project: JAX/Flax NNX for training and an independent Rust CPU engine/server for inference.
+**NileMini-8M-SiTU** is a **7,999,744-parameter decoder-only language model** trained in JAX/Flax NNX and served by an independent Rust CPU inference engine.
 
-## Current status
+The repository contains the complete v1.0.0 release: training code, frozen tokenizer, trained FP32 SafeTensors weights, JAX reference outputs, Rust inference, KV-cached generation, sampling, and an OpenAI-compatible HTTP API.
 
-The engineering path is implemented: tokenizer contract, JAX model, Muon/AdamW training loop, Orbax checkpoint/resume, FP32 SafeTensors export, Rust weight loading, JAX↔Rust parity, KV-cached generation, sampling, and OpenAI-shaped HTTP endpoints.
+## Release results
 
-**The final 1.6B-token pretraining run and 70k-example SFT run have not been completed yet.** The checked-in model package is a smoke/parity artifact, not the final trained release.
+| Item | Result |
+| --- | ---: |
+| Parameters | **7,999,744** |
+| Vocabulary | **8,192** |
+| Context length | **512** |
+| Base dataset | FineWeb-Edu |
+| Pretraining tokens | **140,017,664** |
+| Pretraining updates | **4,273** |
+| Final base validation loss | **3.8659** |
+| Final base validation perplexity | **47.74** |
+| SFT dataset | SmolTalk |
+| SFT split | **448 train / 64 validation** |
+| SFT updates | **56** |
+| Final SFT validation loss | **2.6459** |
+| Exported FP32 weights | **30.52 MiB** |
+| JAX ↔ Rust logits compared | **81,920** |
+| JAX ↔ Rust top-1 agreement | **10/10 (100%)** |
+| JAX ↔ Rust cosine similarity | **0.9999967** |
+| Parity accepted | **true** |
 
-## Frozen architecture
+The SFT pass is intentionally small. It validates the instruction-tuning and chat-serving path; it is not presented as a large-scale instruction-tuning run.
 
-- vocabulary: 8,192 byte-level BPE tokens
-- context: 512 tokens
-- layers: 18
-- hidden size: 640
-- feed-forward size: 1,664
-- attention: 4 query heads / 2 KV heads / head dimension 64
-- RMSNorm epsilon: `1e-5`
-- interleaved RoPE theta: `10000`
-- SiTU-GLU: beta gate `4`, beta up `25`
-- tied embeddings, no bias, no dropout
-- exact parameters: **7,999,744**
+## Architecture
 
-The six reserved token IDs are frozen as pad=0, bos=1, eos=2, system=3, user=4, assistant=5.
+The cross-language contract in [`configs/model.json`](configs/model.json) is:
 
-## Source of truth
+- decoder-only Transformer
+- 8,192-token byte-level BPE vocabulary
+- 512-token context
+- 8 transformer layers
+- hidden size 256
+- feed-forward size 704
+- grouped-query attention: 4 query heads / 2 KV heads
+- head dimension 64
+- RMSNorm epsilon `1e-5`
+- interleaved RoPE theta `10000`
+- SiTU-GLU with beta gate `4` and beta up `25`
+- tied token embedding / output projection
+- no bias
+- no dropout
+- exact parameter count: **7,999,744**
+
+Reserved token IDs are fixed:
 
 ```text
-configs/model.json       Cross-language architecture contract
-configs/training/        Smoke, 20M pilot, 1.6B full, and 70k SFT profiles
-src/nilemini/config.py   Validated architecture/dataset/profile settings
-src/nilemini/tokenizer.py Frozen BPE preparation and validation
-src/nilemini/data.py     FineWeb-Edu deterministic split and uint16 packing
-src/nilemini/model.py    JAX/Flax NNX decoder
-src/nilemini/optimizer.py Muon + AdamW partition and schedules
-src/nilemini/trainer.py  JIT loss, microbatch accumulation, evaluation
-src/nilemini/checkpoint.py Orbax persistence and resume
-src/nilemini/pretrain.py Pretraining orchestration
-src/nilemini/sft.py      SmolTalk preparation and instruction tuning
-src/nilemini/generation.py Frozen chat prompt and JAX reference generation
-src/nilemini/export.py   FP32 SafeTensors/Rust export
-src/nilemini/reference.py Independent NumPy reference math
-infra/modal_train.py     Persistent Modal L4 workflow
-rust/engine/             Independent Rust inference engine
-rust/server/             OpenAI-compatible HTTP/SSE server
+0 <|pad|>
+1 <|bos|>
+2 <|eos|>
+3 <|system|>
+4 <|user|>
+5 <|assistant|>
 ```
 
-The notebook is now a thin, readable entry point. It is **not** a second copy of the training implementation.
+## Training
 
-## Frozen training plan
+### Base pretraining
 
-| Profile | Budget |
-| --- | ---: |
-| `smoke.json` | 16,384 train / 4,096 validation tokens |
-| `pilot_l4.json` | 20,000,000 train / 1,000,000 validation tokens |
-| `full_l4.json` | 1,600,000,000 train / 10,000,000 validation tokens |
-| `sft_l4.json` | 70,000 selected = 68,000 train + 2,000 validation examples |
+The released base checkpoint was trained on revision-pinned **FineWeb-Edu** with [`configs/training/onehour_final.json`](configs/training/onehour_final.json):
 
-Pretraining uses revision-pinned FineWeb-Edu. SFT uses revision-pinned SmolTalk. Transformer Q/K/V/O and gate/up/down matrices use Muon; embeddings and normalization parameters use AdamW. Parameters are FP32, matmul operands are BF16, and accumulation is FP32.
+- train tokens: **140,017,664**
+- validation tokens: **262,144**
+- global batch: 64 sequences × 512 tokens = **32,768 tokens/update**
+- updates: **4,273**
+- Muon peak LR: `0.02`
+- AdamW peak LR: `3e-4`
+- weight decay: `0.1`
+- gradient clipping: `1.0`
+- 2% warmup with cosine decay
 
-## Verify the repository
+Transformer Q/K/V/O and feed-forward gate/up/down matrices use Muon. Embeddings, normalization parameters, and the remaining parameters use AdamW. Parameters are FP32; matmul operands are BF16 with FP32 accumulation.
+
+### Supervised fine-tuning
+
+The release was instruction-tuned on revision-pinned **SmolTalk** with [`configs/training/onehour_sft.json`](configs/training/onehour_sft.json):
+
+- selected examples: **512**
+- train: **448**
+- validation: **64**
+- batch size: 8
+- updates: **56**
+- Muon LR: `0.003`
+- AdamW LR: `5e-5`
+
+Loss is applied only to assistant content and assistant EOS tokens.
+
+See [`docs/TRAINING.md`](docs/TRAINING.md) and [`docs/MODAL_TRAINING.md`](docs/MODAL_TRAINING.md).
+
+## Trained artifact
+
+The final v1.0.0 package is checked in at:
+
+```text
+artifacts/nilemini-8m-situ/
+├── model.safetensors
+├── tokenizer.json
+├── config.json
+├── generation_config.json
+├── reference_inputs.json
+├── reference_outputs.safetensors
+├── manifest.json
+└── SHA256SUMS
+```
+
+The exported model contains **74 tensors**, **7,999,744 parameters**, and **30.52 MiB** of FP32 weights.
+
+Verify the artifact:
+
+```bash
+cd artifacts/nilemini-8m-situ
+sha256sum -c SHA256SUMS
+cd ../..
+```
+
+## JAX ↔ Rust parity
+
+The independent Rust CPU engine was compared against the exported JAX reference over the complete `[1, 10, 8192]` logit tensor:
+
+- logits compared: **81,920**
+- max absolute error: **0.0528898239**
+- mean absolute error: **0.0052069233**
+- RMSE: **0.0074163827**
+- cosine similarity: **0.9999967275**
+- top-1 agreement: **10/10**
+- final-position top-1 match: **true**
+- accepted: **true**
+- violations: **none**
+
+Reproduce:
+
+```bash
+cargo run --release -p nilemini-engine --example parity -- \
+  artifacts/nilemini-8m-situ
+```
+
+See [`docs/parity.md`](docs/parity.md).
+
+## Rust inference server
+
+Start the trained model locally:
+
+```bash
+cargo run --release -p nilemini-server -- \
+  --model-dir artifacts/nilemini-8m-situ \
+  --host 127.0.0.1 \
+  --port 8080
+```
+
+Endpoints:
+
+- `GET /health`
+- `GET /v1/models`
+- `POST /v1/completions`
+- `POST /v1/chat/completions`
+
+Example:
+
+```bash
+curl http://127.0.0.1:8080/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "nilemini-8m-situ",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "max_tokens": 16,
+    "temperature": 0.0
+  }'
+```
+
+`stream: true` returns SSE frames ending with `data: [DONE]`. The current server completes generation synchronously before emitting the buffered SSE body; this is wire-compatible SSE framing rather than token-time streaming.
+
+See [`docs/API.md`](docs/API.md).
+
+## Repository layout
+
+```text
+configs/model.json             Cross-language architecture contract
+configs/training/              Training and SFT profiles
+src/nilemini/config.py         Validated model/dataset/profile settings
+src/nilemini/tokenizer.py      BPE preparation and tokenizer validation
+src/nilemini/data.py           FineWeb-Edu split, tokenization, uint16 packing
+src/nilemini/model.py          JAX/Flax NNX model
+src/nilemini/optimizer.py      Muon + AdamW partition and schedules
+src/nilemini/trainer.py        JIT training/evaluation and accumulation
+src/nilemini/checkpoint.py     Orbax checkpoint/resume
+src/nilemini/pretrain.py       Pretraining orchestration
+src/nilemini/sft.py            SmolTalk preparation and SFT
+src/nilemini/generation.py     Chat template and JAX reference generation
+src/nilemini/export.py         FP32 SafeTensors export
+src/nilemini/reference.py      Independent NumPy reference math
+infra/modal_train.py           Modal L4 workflow
+rust/engine/                   Independent Rust CPU inference engine
+rust/server/                   OpenAI-compatible HTTP/SSE server
+artifacts/nilemini-8m-situ/    Final trained v1.0.0 artifact
+```
+
+## Verification
+
+Python:
 
 ```bash
 uv sync --locked --all-groups
 uv run nilemini doctor
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy
+uv run mypy src
 uv run pytest
+```
+
+Rust:
+
+```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-## Modal L4: smoke → pilot → full → SFT → export
-
-Authenticate Modal once:
+Real trained-artifact parity:
 
 ```bash
-uvx --from 'modal==1.5.3' modal setup
+cargo run --release -p nilemini-engine --example parity -- \
+  artifacts/nilemini-8m-situ
 ```
 
-Then run the tiny paid-GPU smoke first:
+Some expensive real-artifact integration tests are intentionally ignored in the default debug test suite and document their release-mode requirements. The explicit parity command above exercises the final trained artifact in release mode.
 
-```bash
-./scripts/modal_train.sh --stage smoke
-```
+## Scope
 
-After its loss/checkpoint behavior is healthy:
+NileMini is intentionally small. The project is an end-to-end language-model systems implementation focused on:
 
-```bash
-./scripts/modal_train.sh --stage pilot
-```
+1. training from a frozen architecture contract,
+2. deterministic data preparation and checkpointing,
+3. framework-independent SafeTensors export,
+4. independent Rust inference,
+5. numerical JAX ↔ Rust validation,
+6. KV-cached autoregressive generation and sampling, and
+7. OpenAI-compatible serving.
 
-Only after reviewing the 20M pilot:
-
-```bash
-./scripts/modal_train.sh --stage full
-./scripts/modal_train.sh --stage sft
-./scripts/modal_train.sh --stage export
-```
-
-Each stage prepares data on CPU before allocating the L4. Training checkpoints are committed to the persistent Modal Volume and automatically resumed after interruption. Public Hugging Face datasets work anonymously; setting `HF_TOKEN` is optional outside the checked-in code.
-
-See [Training](docs/TRAINING.md) and [Modal Training](docs/MODAL_TRAINING.md).
-
-## Rust server
-
-With a complete artifact directory containing `model.safetensors`:
-
-```bash
-cargo run --release --package nilemini-server -- \
-  --model-dir artifacts/nilemini-8m-situ \
-  --host 127.0.0.1 \
-  --port 8080
-```
-
-The server exposes `/health`, `/v1/models`, `/v1/completions`, and `/v1/chat/completions`. See [API](docs/API.md).
-
-## Artifact policy
-
-Raw datasets, packed training data, Orbax checkpoints, run logs, secrets, and final trained weights stay out of Git. Final model files should be published separately with immutable checksums after the real training/SFT/export/parity sequence is complete.
+Model quality is constrained by the **8M parameter scale** and the small SFT set. The repository emphasizes reproducibility, measured results, and systems correctness rather than frontier-model capability.
 
 ## License
 
-Apache-2.0 for repository code/documentation. Dataset and model-release licensing must follow the upstream sources and the final release review.
+Apache-2.0 for repository code and documentation. Dataset and model use must also comply with the applicable upstream dataset licenses and terms.
