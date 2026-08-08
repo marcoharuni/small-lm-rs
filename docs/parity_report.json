@@ -4,37 +4,15 @@
   "vocab_size": 8192,
   "metrics": {
     "element_count": 81920,
-    "max_abs_error": 0.005184650421142578,
-    "mean_abs_error": 0.000966181391140708,
-    "root_mean_square_error": 0.001212454656689186,
-    "cosine_similarity": 0.9999991079169906,
+    "max_abs_error": 0.05288982391357422,
+    "mean_abs_error": 0.005206923344155711,
+    "root_mean_square_error": 0.007416382676593778,
+    "cosine_similarity": 0.9999967275464626,
     "top1_matches": 10,
     "top1_total": 10,
     "top1_agreement": 1.0,
-    "rust_top1_token_ids": [
-      267,
-      267,
-      267,
-      267,
-      267,
-      267,
-      267,
-      267,
-      267,
-      17
-    ],
-    "reference_top1_token_ids": [
-      267,
-      267,
-      267,
-      267,
-      267,
-      267,
-      267,
-      267,
-      267,
-      17
-    ],
+    "rust_top1_token_ids": [267, 267, 18, 474, 84, 17, 18, 453, 17, 2451],
+    "reference_top1_token_ids": [267, 267, 18, 474, 84, 17, 18, 453, 17, 2451],
     "final_position_top1_match": true
   },
   "thresholds": {
