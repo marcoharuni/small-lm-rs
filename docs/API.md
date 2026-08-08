@@ -1,15 +1,12 @@
-# NileMini HTTP API
+# HTTP API
 
-The Rust server loads the model, tokenizer, and generation metadata once at startup and exposes both a local browser chat page and an OpenAI-compatible API subset.
+The Rust server loads the model and tokenizer once at startup and serves both a browser chat and an OpenAI-compatible API subset.
 
 ```bash
-cargo run --release --package nilemini-server -- \
-  --model-dir artifacts/nilemini-8m-situ \
-  --host 127.0.0.1 \
-  --port 8080
+./scripts/run_server.sh
 ```
 
-Keep the server on loopback. Authentication, TLS, quotas, and multi-tenant hardening are not implemented.
+The default address is `127.0.0.1:8080`.
 
 ## Browser chat
 
@@ -19,26 +16,25 @@ Open:
 http://127.0.0.1:8080/
 ```
 
-The page is embedded directly into the Rust server binary and talks to the same `/health` and `/v1/chat/completions` endpoints documented below. No Node.js frontend, separate web server, or CORS configuration is required.
+The page is embedded in the Rust binary and uses the same chat-completions endpoint as API clients.
 
-The UI keeps the current conversation in browser memory, exposes `max_tokens` and `temperature`, shows token usage returned by the API, and includes a clear-conversation control.
+## Health
 
-## `GET /health`
-
-```json
-{
-  "status": "ok",
-  "service": "nilemini-server",
-  "ready": true,
-  "model": "nilemini-8m-situ"
-}
+```text
+GET /health
 ```
 
-## `GET /v1/models`
+A ready server returns the loaded model identifier and `service: small-lm-rs`.
 
-Returns an OpenAI-shaped model list containing `nilemini-8m-situ`.
+## Models
 
-## `POST /v1/chat/completions`
+```text
+GET /v1/models
+```
+
+The bundled artifact uses the compatibility identifier `nilemini-8m-situ`.
+
+## Chat completions
 
 ```bash
 curl http://127.0.0.1:8080/v1/chat/completions \
@@ -47,16 +43,13 @@ curl http://127.0.0.1:8080/v1/chat/completions \
     "model": "nilemini-8m-situ",
     "messages": [{"role": "user", "content": "Hello"}],
     "max_tokens": 16,
-    "temperature": 0.0,
-    "top_p": 1.0,
-    "top_k": 0,
-    "seed": 0
+    "temperature": 0.0
   }'
 ```
 
-Supported roles are `system`, `user`, and `assistant`. The frozen chat template allows a system message only at index zero and requires the final message to be from the user.
+Supported roles are `system`, `user`, and `assistant`.
 
-## `POST /v1/completions`
+## Text completions
 
 ```bash
 curl http://127.0.0.1:8080/v1/completions \
@@ -69,35 +62,26 @@ curl http://127.0.0.1:8080/v1/completions \
   }'
 ```
 
-## Sampling and limits
+## Generation controls
 
-- `max_tokens`: default 16, accepted range 1 through 128
-- `temperature`: default 0; zero is greedy
-- `top_p`: default 1, accepted range `(0, 1]`
-- `top_k`: default 0; zero disables top-k filtering
-- `seed`: default 0
-- unknown JSON fields receive HTTP 400
+- `max_tokens`: 1–128, default 16
+- `temperature`: 0 selects greedy decoding
+- `top_p`: `(0, 1]`
+- `top_k`: 0 disables top-k filtering
+- `seed`: deterministic sampler seed
 
-The engine separately enforces the 512-token total context limit.
+The model enforces a 512-token total context limit.
 
 ## Streaming
 
-Set `"stream": true` to receive `text/event-stream` frames ending with:
+`"stream": true` returns `text/event-stream` frames ending in:
 
 ```text
 data: [DONE]
 ```
 
-The current synchronous CPU service completes generation before emitting the SSE body. The wire contract is client-compatible; token-time delivery and disconnect-aware cancellation remain later optimizations.
+Generation currently completes before the buffered SSE body is emitted. True token-time streaming is not implemented yet.
 
 ## Concurrency
 
-HTTP handling is asynchronous. CPU inference runs on Tokio's blocking pool and is serialized through the loaded service. Each generation invocation creates a fresh KV cache, so decoding state is never shared between requests.
-
-## End-to-end smoke test
-
-```bash
-./scripts/smoke_server.sh artifacts/nilemini-8m-situ
-```
-
-For a short presentation workflow, see [`DEMO.md`](DEMO.md).
+HTTP handling is asynchronous. CPU inference runs on Tokio's blocking pool and is serialized through the loaded generation service. Each request gets its own KV cache.
