@@ -1,5 +1,7 @@
 //! Bias-free linear projection using exported `[out, in]` weights.
 
+use rayon::prelude::*;
+
 use crate::error::Result;
 use crate::tensor::{checked_matrix_len, validate_matrix};
 
@@ -26,8 +28,11 @@ pub(crate) fn round_to_bfloat16(value: f32) -> f32 {
 /// NileMini layout `[out_features, in_features]`. The returned vector has
 /// shape `[rows, out_features]`.
 ///
-/// Inputs and weights are rounded to bfloat16 before multiplication, while
-/// accumulation remains FP32 to follow the JAX reference computation.
+/// Output elements are independent, so release inference distributes them
+/// across Rayon's CPU worker pool. The accumulation order inside each dot
+/// product is unchanged, preserving the numerical contract used by parity
+/// tests. Inputs and weights are rounded to bfloat16 before multiplication,
+/// while accumulation remains FP32 to follow the JAX reference computation.
 ///
 /// # Errors
 ///
@@ -46,13 +51,16 @@ pub fn linear(
     let output_len = checked_matrix_len("linear output", rows, out_features)?;
     let mut output = vec![0.0_f32; output_len];
 
-    for (input_row, output_row) in input
-        .chunks_exact(in_features)
-        .zip(output.chunks_exact_mut(out_features))
-    {
-        for (output_index, output_value) in output_row.iter_mut().enumerate() {
-            let start = output_index * in_features;
-            let weight_row = &weight[start..start + in_features];
+    output
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(flat_index, output_value)| {
+            let row_index = flat_index / out_features;
+            let output_index = flat_index % out_features;
+            let input_start = row_index * in_features;
+            let input_row = &input[input_start..input_start + in_features];
+            let weight_start = output_index * in_features;
+            let weight_row = &weight[weight_start..weight_start + in_features];
 
             *output_value = input_row.iter().zip(weight_row).fold(
                 0.0_f32,
@@ -60,8 +68,7 @@ pub fn linear(
                     round_to_bfloat16(input_value).mul_add(round_to_bfloat16(weight_value), sum)
                 },
             );
-        }
-    }
+        });
 
     Ok(output)
 }
