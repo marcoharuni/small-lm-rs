@@ -1,6 +1,6 @@
 [package]
 name = "nilemini-server"
-description = "HTTP server scaffold for NileMini inference"
+description = "OpenAI-compatible HTTP server for the local Rust inference engine"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
