@@ -33,6 +33,12 @@
       font-weight: 600;
     }
 
+    h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
     #status {
       font-size: 13px;
       color: #777;
@@ -160,11 +166,49 @@
       font-size: 12px;
     }
 
+    .benchmark {
+      margin-top: 20px;
+      padding-top: 14px;
+      border-top: 1px solid #d8d8d8;
+      font-size: 12px;
+      color: #555;
+    }
+
+    .machine {
+      margin-bottom: 10px;
+      line-height: 1.55;
+    }
+
+    .benchmark-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+
+    .benchmark-table th,
+    .benchmark-table td {
+      padding: 7px 8px;
+      border: 1px solid #ddd;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .benchmark-table th:first-child,
+    .benchmark-table td:first-child {
+      text-align: left;
+    }
+
+    .benchmark-table th {
+      font-weight: 600;
+      background: #f0f0f0;
+    }
+
     @media (max-width: 600px) {
       .page { margin-top: 14px; }
       #chat { min-height: 120px; max-height: 48vh; }
       .toolbar { align-items: flex-end; }
       .settings { gap: 7px; }
+      .benchmark { overflow-x: auto; }
     }
   </style>
 </head>
@@ -201,6 +245,36 @@
       </div>
 
       <div class="note">NileMini-8M-SiTU · local Rust inference</div>
+    </section>
+
+    <section class="benchmark" aria-label="CPU benchmark results">
+      <h2>CPU benchmark</h2>
+      <div class="machine">
+        Intel Core i5-4310U @ 2.00GHz · 4 logical CPUs · 7.6 GiB RAM<br>
+        Rust 1.97.1 · Rayon 4 threads · model: nilemini-8m-situ
+      </div>
+
+      <table class="benchmark-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>32 prompt + 32 decode</th>
+            <th>128 prompt + 32 decode</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Model load</td><td>53.16 ms</td><td>45.65 ms</td></tr>
+          <tr><td>Prompt tokens</td><td>32</td><td>128</td></tr>
+          <tr><td>Prefill</td><td>610.25 ms</td><td>2462.19 ms</td></tr>
+          <tr><td>Prefill speed</td><td>52.44 tok/s</td><td>51.99 tok/s</td></tr>
+          <tr><td>TTFT</td><td>610.28 ms</td><td>2462.22 ms</td></tr>
+          <tr><td>Generation</td><td>32 tokens</td><td>32 tokens</td></tr>
+          <tr><td>Decode</td><td>45.32 tok/s</td><td>44.09 tok/s</td></tr>
+          <tr><td>Inter-token</td><td>22.07 ms</td><td>22.68 ms</td></tr>
+          <tr><td>Peak RSS</td><td>65.61 MiB</td><td>65.55 MiB</td></tr>
+        </tbody>
+      </table>
+      <div class="note">Measured on the submission machine · final trained FP32 artifact</div>
     </section>
   </main>
 
