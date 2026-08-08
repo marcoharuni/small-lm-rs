@@ -1,201 +1,31 @@
-# NileMini-8M-SiTU
+# small-lm-rs
 
-[![CI](https://github.com/marcoharuni/nilemini-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/marcoharuni/nilemini-rs/actions/workflows/ci.yml)
+A small decoder-only language model trained in JAX and served by an independent Rust CPU inference engine.
 
-**NileMini-8M-SiTU** is a **7,999,744-parameter decoder-only language model** trained in JAX/Flax NNX and executed by an independent Rust CPU inference engine.
+The repository contains the training pipeline, tokenizer, exported SafeTensors weights, Rust inference code, KV-cached generation, sampling, a browser chat, and an OpenAI-compatible API.
 
-The repository contains the complete trained release: deterministic data/training code, frozen tokenizer, FP32 SafeTensors weights, JAX reference outputs, Rust Transformer inference, multicore dense projections, KV-cached generation, sampling, a browser chat UI, an OpenAI-compatible HTTP API, reproducible CPU benchmarks, and a one-command submission verification gate.
-
-## Chat with NileMini
-
-Clone the repository and start the Rust server:
+## Run
 
 ```bash
-git clone https://github.com/marcoharuni/nilemini-rs.git
-cd nilemini-rs
-
-cargo run --release -p nilemini-server -- \
-  --model-dir artifacts/nilemini-8m-situ \
-  --host 127.0.0.1 \
-  --port 8080
+./scripts/run_server.sh
 ```
 
-Then open:
+Then open `http://127.0.0.1:8080/`.
+
+API endpoints:
 
 ```text
-http://127.0.0.1:8080/
+GET  /health
+GET  /v1/models
+POST /v1/completions
+POST /v1/chat/completions
 ```
-
-The browser interface is served directly by the Rust binary and talks to the same `/v1/chat/completions` endpoint as API clients. No Node.js frontend or second web server is required.
-
-> NileMini is intentionally tiny. The 8M-parameter scale and small SFT pass make this primarily a language-model systems/reproducibility project, not a frontier chat model.
-
-## Release results
-
-| Item | Result |
-| --- | ---: |
-| Parameters | **7,999,744** |
-| Vocabulary | **8,192** |
-| Context length | **512** |
-| Base dataset | FineWeb-Edu |
-| Pretraining tokens | **140,017,664** |
-| Pretraining updates | **4,273** |
-| Final base validation loss | **3.8659** |
-| Final base validation perplexity | **47.74** |
-| SFT dataset | SmolTalk |
-| SFT split | **448 train / 64 validation** |
-| SFT updates | **56** |
-| Final SFT validation loss | **2.6459** |
-| Exported FP32 weights | **30.52 MiB** |
-| JAX ↔ Rust logits compared | **81,920** |
-| JAX ↔ Rust top-1 agreement | **10/10 (100%)** |
-| JAX ↔ Rust cosine similarity | **0.9999967** |
-| Parity accepted | **true** |
-
-The SFT pass is intentionally small. It validates the instruction-tuning and chat-serving path; it is not presented as a large-scale instruction-tuning run.
-
-## Architecture
-
-The cross-language contract in [`configs/model.json`](configs/model.json) is:
-
-- decoder-only Transformer
-- 8,192-token byte-level BPE vocabulary
-- 512-token context
-- 8 transformer layers
-- hidden size 256
-- feed-forward size 704
-- grouped-query attention: 4 query heads / 2 KV heads
-- head dimension 64
-- RMSNorm epsilon `1e-5`
-- interleaved RoPE theta `10000`
-- SiTU-GLU with beta gate `4` and beta up `25`
-- tied token embedding / output projection
-- no bias
-- no dropout
-- exact parameter count: **7,999,744**
-
-Reserved token IDs are fixed:
-
-```text
-0 <|pad|>
-1 <|bos|>
-2 <|eos|>
-3 <|system|>
-4 <|user|>
-5 <|assistant|>
-```
-
-## Training
-
-### Base pretraining
-
-The released base checkpoint was trained on revision-pinned **FineWeb-Edu** with [`configs/training/onehour_final.json`](configs/training/onehour_final.json):
-
-- train tokens: **140,017,664**
-- validation tokens: **262,144**
-- global batch: 64 sequences × 512 tokens = **32,768 tokens/update**
-- updates: **4,273**
-- Muon peak LR: `0.02`
-- AdamW peak LR: `3e-4`
-- weight decay: `0.1`
-- gradient clipping: `1.0`
-- 2% warmup with cosine decay
-
-Transformer Q/K/V/O and feed-forward gate/up/down matrices use Muon. Embeddings, normalization parameters, and the remaining parameters use AdamW. Parameters are FP32; matmul operands are BF16 with FP32 accumulation.
-
-### Supervised fine-tuning
-
-The release was instruction-tuned on revision-pinned **SmolTalk** with [`configs/training/onehour_sft.json`](configs/training/onehour_sft.json):
-
-- selected examples: **512**
-- train: **448**
-- validation: **64**
-- batch size: 8
-- updates: **56**
-- Muon LR: `0.003`
-- AdamW LR: `5e-5`
-
-Loss is applied only to assistant content and assistant EOS tokens.
-
-See [`docs/TRAINING.md`](docs/TRAINING.md) and [`docs/MODAL_TRAINING.md`](docs/MODAL_TRAINING.md).
-
-## Trained artifact
-
-The trained package is checked in at:
-
-```text
-artifacts/nilemini-8m-situ/
-├── model.safetensors
-├── tokenizer.json
-├── config.json
-├── generation_config.json
-├── reference_inputs.json
-├── reference_outputs.safetensors
-├── manifest.json
-└── SHA256SUMS
-```
-
-The exported model contains **74 tensors**, **7,999,744 parameters**, and **30.52 MiB** of FP32 weights.
-
-Verify it:
-
-```bash
-cd artifacts/nilemini-8m-situ
-sha256sum -c SHA256SUMS
-cd ../..
-```
-
-## JAX ↔ Rust parity
-
-The independent Rust CPU engine was compared against the exported JAX reference over the complete `[1, 10, 8192]` logit tensor:
-
-- logits compared: **81,920**
-- max absolute error: **0.0528898239**
-- mean absolute error: **0.0052069233**
-- RMSE: **0.0074163827**
-- cosine similarity: **0.9999967275**
-- top-1 agreement: **10/10**
-- final-position top-1 match: **true**
-- accepted: **true**
-- violations: **none**
-
-Reproduce:
-
-```bash
-cargo run --release -p nilemini-engine --example parity -- \
-  artifacts/nilemini-8m-situ
-```
-
-See [`docs/parity.md`](docs/parity.md).
-
-## CPU inference and benchmark
-
-Dense projection output elements are distributed across a Rayon CPU worker pool while each output dot product preserves the same accumulation order used for the JAX/Rust parity contract. Generation uses prompt prefill followed by KV-cached one-token decoding.
-
-Run the trained-model CPU benchmark:
-
-```bash
-bash scripts/benchmark.sh
-```
-
-It records the review machine's CPU/runtime information, model-load time, prefill latency/tokens per second, and cached-decode latency/tokens per second for fixed 32-token and 128-token prompt workloads. Final measured values belong in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md); they are never estimated.
-
-See [`docs/ENGINE.md`](docs/ENGINE.md).
-
-## OpenAI-compatible API
-
-The same Rust server exposes:
-
-- `GET /health`
-- `GET /v1/models`
-- `POST /v1/completions`
-- `POST /v1/chat/completions`
 
 Example:
 
 ```bash
 curl http://127.0.0.1:8080/v1/chat/completions \
-  -H 'Content-Type: application/json' \
+  -H 'content-type: application/json' \
   -d '{
     "model": "nilemini-8m-situ",
     "messages": [{"role": "user", "content": "Hello"}],
@@ -204,78 +34,100 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   }'
 ```
 
-`stream: true` returns SSE frames ending with `data: [DONE]`. The current server completes generation synchronously before emitting the buffered SSE body; this is wire-compatible SSE framing rather than token-time streaming.
+The bundled artifact keeps its original model identifier, `nilemini-8m-situ`, so exported weights, manifests, tests, and parity fixtures remain reproducible. That identifier is not the project name.
 
-See [`docs/API.md`](docs/API.md).
+## Model
 
-## Repository layout
+The checked-in model has:
+
+| | |
+| --- | ---: |
+| Parameters | 7,999,744 |
+| Layers | 8 |
+| Hidden size | 256 |
+| FFN size | 704 |
+| Vocabulary | 8,192 |
+| Context | 512 |
+| Query / KV heads | 4 / 2 |
+| Head dimension | 64 |
+
+The decoder uses RMSNorm, grouped-query attention, RoPE, a bounded gated FFN, tied embeddings, and no bias or dropout. The exact architecture is documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Training
+
+The base model was trained on 140,017,664 FineWeb-Edu tokens with 262,144 held-out validation tokens. The final base validation loss was 3.8659 (perplexity 47.74).
+
+A small supervised fine-tuning pass used 448 SmolTalk training examples and 64 validation examples. Its purpose was to exercise the complete instruction-tuning and chat-serving path; the model is too small to be treated as a strong general-purpose assistant.
+
+Training uses JAX/Flax NNX with Muon for the transformer projection matrices and AdamW for the remaining parameters. See [`docs/TRAINING.md`](docs/TRAINING.md).
+
+## Rust engine
+
+The inference implementation does not call JAX or Python at runtime. It loads the exported artifacts directly and implements:
+
+- SafeTensors weight loading
+- tokenizer and chat formatting
+- RMSNorm and RoPE
+- grouped-query causal attention
+- feed-forward blocks
+- prompt prefill and KV-cached decode
+- greedy, temperature, top-k, and top-p sampling
+- multicore dense projections with Rayon
+
+See [`docs/ENGINE.md`](docs/ENGINE.md).
+
+## JAX / Rust parity
+
+The exported JAX reference and Rust engine were compared over 81,920 logits:
 
 ```text
-configs/model.json             Cross-language architecture contract
-configs/training/              Training and SFT profiles
-src/nilemini/                  JAX model, training, evaluation, export
-infra/modal_train.py           Modal L4 training workflow
-rust/engine/                   Independent Rust CPU inference engine
-rust/server/                   OpenAI-compatible API + browser chat
-artifacts/nilemini-8m-situ/    Final trained artifact
-benchmarks/                    Reproducible CPU benchmark inputs/results
-scripts/                       Training, export, server, test, benchmark gates
-docs/                          Architecture, training, engine, API, parity docs
+max absolute error   0.0528898239
+mean absolute error  0.0052069233
+RMSE                 0.0074163827
+cosine similarity    0.9999967275
+top-1 agreement      10/10
 ```
 
-## Verification
+Details and the machine-readable report are in [`docs/parity.md`](docs/parity.md) and [`docs/parity_report.json`](docs/parity_report.json).
 
-Python:
+## Benchmark
+
+CPU measurements are kept in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md). They are deliberately kept out of the chat UI.
+
+Run them on another machine with:
+
+```bash
+bash scripts/benchmark.sh
+```
+
+## Development
 
 ```bash
 uv sync --locked --all-groups
-uv run nilemini doctor
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy src
-uv run pytest
-```
-
-Rust:
-
-```bash
+uv run --frozen pytest
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-Real trained-artifact parity:
+The quick repository check is:
 
 ```bash
-cargo run --release -p nilemini-engine --example parity -- \
-  artifacts/nilemini-8m-situ
+bash scripts/check.sh
 ```
 
-Complete submission gate:
+## Layout
 
-```bash
-bash scripts/verify_submission.sh
+```text
+src/nilemini/               JAX training and export code
+rust/engine/                Rust inference engine
+rust/server/                HTTP server and browser chat
+artifacts/nilemini-8m-situ/ bundled trained artifact
+configs/                    model and training configuration
+docs/                       implementation notes
+benchmarks/                 CPU benchmark data
 ```
-
-That gate verifies artifact checksums, Python tests, Rust format/clippy/tests, trained-model JAX↔Rust parity, server startup, `/health`, `/v1/models`, non-streaming `/v1/chat/completions`, and SSE completion framing.
-
-Some expensive real-artifact integration tests are intentionally ignored in the default debug test suite and document their release-mode requirements. The explicit parity command above exercises the final trained artifact in release mode.
-
-## Scope
-
-NileMini is an end-to-end language-model systems implementation focused on:
-
-1. training from a frozen architecture contract,
-2. deterministic data preparation and checkpointing,
-3. framework-independent SafeTensors export,
-4. independent multicore Rust CPU inference,
-5. numerical JAX ↔ Rust validation,
-6. KV-cached autoregressive generation and sampling,
-7. browser-based local chat, and
-8. OpenAI-compatible serving.
-
-Model quality is constrained by the **8M parameter scale** and the small SFT set. The repository emphasizes reproducibility, measured results, and systems correctness rather than frontier-model capability.
 
 ## License
 
-Apache-2.0 for repository code and documentation. Dataset and model use must also comply with the applicable upstream dataset licenses and terms.
+Apache-2.0 for the repository code and documentation. Dataset use remains subject to the upstream dataset terms.
