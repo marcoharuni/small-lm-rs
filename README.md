@@ -4,7 +4,7 @@
 
 **NileMini-8M-SiTU** is a **7,999,744-parameter decoder-only language model** trained in JAX/Flax NNX and executed by an independent Rust CPU inference engine.
 
-The repository contains the complete trained release: deterministic data/training code, frozen tokenizer, FP32 SafeTensors weights, JAX reference outputs, Rust Transformer inference, KV-cached generation, sampling, a browser chat UI, and an OpenAI-compatible HTTP API.
+The repository contains the complete trained release: deterministic data/training code, frozen tokenizer, FP32 SafeTensors weights, JAX reference outputs, Rust Transformer inference, multicore dense projections, KV-cached generation, sampling, a browser chat UI, an OpenAI-compatible HTTP API, reproducible CPU benchmarks, and a one-command submission verification gate.
 
 ## Chat with NileMini
 
@@ -168,6 +168,20 @@ cargo run --release -p nilemini-engine --example parity -- \
 
 See [`docs/parity.md`](docs/parity.md).
 
+## CPU inference and benchmark
+
+Dense projection output elements are distributed across a Rayon CPU worker pool while each output dot product preserves the same accumulation order used for the JAX/Rust parity contract. Generation uses prompt prefill followed by KV-cached one-token decoding.
+
+Run the trained-model CPU benchmark:
+
+```bash
+bash scripts/benchmark.sh
+```
+
+It records the review machine's CPU/runtime information, model-load time, prefill latency/tokens per second, and cached-decode latency/tokens per second for fixed 32-token and 128-token prompt workloads. Final measured values belong in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md); they are never estimated.
+
+See [`docs/ENGINE.md`](docs/ENGINE.md).
+
 ## OpenAI-compatible API
 
 The same Rust server exposes:
@@ -199,22 +213,14 @@ See [`docs/API.md`](docs/API.md).
 ```text
 configs/model.json             Cross-language architecture contract
 configs/training/              Training and SFT profiles
-src/nilemini/config.py         Validated model/dataset/profile settings
-src/nilemini/tokenizer.py      BPE preparation and tokenizer validation
-src/nilemini/data.py           FineWeb-Edu split, tokenization, uint16 packing
-src/nilemini/model.py          JAX/Flax NNX model
-src/nilemini/optimizer.py      Muon + AdamW partition and schedules
-src/nilemini/trainer.py        JIT training/evaluation and accumulation
-src/nilemini/checkpoint.py     Orbax checkpoint/resume
-src/nilemini/pretrain.py       Pretraining orchestration
-src/nilemini/sft.py            SmolTalk preparation and SFT
-src/nilemini/generation.py     Chat template and JAX reference generation
-src/nilemini/export.py         FP32 SafeTensors export
-src/nilemini/reference.py      Independent NumPy reference math
-infra/modal_train.py           Modal L4 workflow
+src/nilemini/                  JAX model, training, evaluation, export
+infra/modal_train.py           Modal L4 training workflow
 rust/engine/                   Independent Rust CPU inference engine
 rust/server/                   OpenAI-compatible API + browser chat
 artifacts/nilemini-8m-situ/    Final trained artifact
+benchmarks/                    Reproducible CPU benchmark inputs/results
+scripts/                       Training, export, server, test, benchmark gates
+docs/                          Architecture, training, engine, API, parity docs
 ```
 
 ## Verification
@@ -245,6 +251,14 @@ cargo run --release -p nilemini-engine --example parity -- \
   artifacts/nilemini-8m-situ
 ```
 
+Complete submission gate:
+
+```bash
+bash scripts/verify_submission.sh
+```
+
+That gate verifies artifact checksums, Python tests, Rust format/clippy/tests, trained-model JAX↔Rust parity, server startup, `/health`, `/v1/models`, non-streaming `/v1/chat/completions`, and SSE completion framing.
+
 Some expensive real-artifact integration tests are intentionally ignored in the default debug test suite and document their release-mode requirements. The explicit parity command above exercises the final trained artifact in release mode.
 
 ## Scope
@@ -254,7 +268,7 @@ NileMini is an end-to-end language-model systems implementation focused on:
 1. training from a frozen architecture contract,
 2. deterministic data preparation and checkpointing,
 3. framework-independent SafeTensors export,
-4. independent Rust inference,
+4. independent multicore Rust CPU inference,
 5. numerical JAX ↔ Rust validation,
 6. KV-cached autoregressive generation and sampling,
 7. browser-based local chat, and
