@@ -20,6 +20,7 @@ struct AppState {
     worker: InferenceWorker,
 }
 
+/// Build the HTTP application around an inference worker.
 pub fn router(worker: InferenceWorker) -> Router {
     Router::new()
         .route("/", get(chat_ui))
@@ -92,7 +93,12 @@ mod tests {
     #[tokio::test]
     async fn root_serves_browser_chat_ui() {
         let response = router(InferenceWorker::new())
-            .oneshot(Request::builder().uri("/").body(Body::empty()).expect("valid request"))
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .body(Body::empty())
+                    .expect("valid request"),
+            )
             .await
             .expect("router response");
 
@@ -115,12 +121,19 @@ mod tests {
     #[tokio::test]
     async fn health_endpoint_reports_unloaded_test_worker() {
         let response = router(InferenceWorker::new())
-            .oneshot(Request::builder().uri("/health").body(Body::empty()).expect("valid request"))
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .expect("valid request"),
+            )
             .await
             .expect("router response");
 
         assert_eq!(response.status(), StatusCode::OK);
-        let bytes = to_bytes(response.into_body(), 4_096).await.expect("read response body");
+        let bytes = to_bytes(response.into_body(), 4_096)
+            .await
+            .expect("read response body");
         let body = serde_json::from_slice::<HealthResponse>(&bytes).expect("valid health JSON");
         assert!(!body.ready);
     }
@@ -128,12 +141,19 @@ mod tests {
     #[tokio::test]
     async fn models_endpoint_lists_the_configured_identifier() {
         let response = router(InferenceWorker::new())
-            .oneshot(Request::builder().uri("/v1/models").body(Body::empty()).expect("valid request"))
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/models")
+                    .body(Body::empty())
+                    .expect("valid request"),
+            )
             .await
             .expect("router response");
 
         assert_eq!(response.status(), StatusCode::OK);
-        let bytes = to_bytes(response.into_body(), 4_096).await.expect("read response body");
+        let bytes = to_bytes(response.into_body(), 4_096)
+            .await
+            .expect("read response body");
         let body = serde_json::from_slice::<ModelListResponse>(&bytes).expect("valid model list");
         assert_eq!(body.data[0].id, "nilemini-8m-situ");
         assert_eq!(body.data[0].owned_by, "small-lm-rs");
@@ -159,7 +179,9 @@ mod tests {
             .expect("router response");
 
         assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
-        let bytes = to_bytes(response.into_body(), 8_192).await.expect("read error body");
+        let bytes = to_bytes(response.into_body(), 8_192)
+            .await
+            .expect("read error body");
         let body = serde_json::from_slice::<ErrorResponse>(&bytes).expect("valid error JSON");
         assert_eq!(body.error.code, "not_implemented");
     }
@@ -184,7 +206,9 @@ mod tests {
             .expect("router response");
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        let bytes = to_bytes(response.into_body(), 8_192).await.expect("read error body");
+        let bytes = to_bytes(response.into_body(), 8_192)
+            .await
+            .expect("read error body");
         let body = serde_json::from_slice::<ErrorResponse>(&bytes).expect("valid error JSON");
         assert_eq!(body.error.code, "invalid_request");
     }
