@@ -1,6 +1,6 @@
 [package]
 name = "nilemini-engine"
-description = "Independent Rust CPU inference engine for NileMini"
+description = "Rust CPU inference engine for the bundled language model"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
