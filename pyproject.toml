@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "nilemini"
 version = "0.1.0"
-description = "JAX training and reference tooling for NileMini-8M-SiTU"
+description = "JAX training and reference tooling for the bundled small language model"
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
 license = "Apache-2.0"
@@ -65,7 +65,7 @@ addopts = "-ra --strict-config --strict-markers"
 pythonpath = ["src"]
 testpaths = ["tests"]
 markers = [
-  "api: tests that require a running NileMini server",
+  "api: tests that require a running local model server",
   "parity: JAX-Rust numerical parity tests",
 ]
 
