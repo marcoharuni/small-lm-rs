@@ -1,4 +1,4 @@
-//! NileMini asynchronous HTTP server.
+//! Local language-model HTTP server.
 
 #![forbid(unsafe_code)]
 
@@ -21,8 +21,8 @@ use worker::InferenceWorker;
 
 #[derive(Clone, Debug, Parser)]
 #[command(
-    name = "nilemini-server",
-    about = "Serve NileMini through an OpenAI-compatible local HTTP API"
+    name = "small-lm-server",
+    about = "Serve a local language model through an OpenAI-compatible HTTP API"
 )]
 struct Args {
     /// Directory containing config, tokenizer, generation metadata, and weights.
@@ -47,7 +47,7 @@ async fn main() -> Result<(), ServerError> {
         .init();
 
     let args = Args::parse();
-    info!(model_dir = %args.model_dir.display(), "loading NileMini artifacts");
+    info!(model_dir = %args.model_dir.display(), "loading model artifacts");
     let service = GenerationService::from_artifact_dir(&args.model_dir)
         .map_err(|source| ServerError::Engine { source })?;
     let worker = InferenceWorker::from_service(service);
@@ -57,7 +57,7 @@ async fn main() -> Result<(), ServerError> {
         .await
         .map_err(|source| ServerError::Bind { address, source })?;
 
-    info!(%address, model = worker.model_name(), "NileMini server ready");
+    info!(%address, model = worker.model_name(), "SmallLM server ready");
     axum::serve(listener, api::router(worker))
         .with_graceful_shutdown(shutdown_signal())
         .await
@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn command_line_defaults_are_local_and_predictable() {
-        let args = Args::try_parse_from(["nilemini-server"]).expect("default arguments parse");
+        let args = Args::try_parse_from(["small-lm-server"]).expect("default arguments parse");
 
         assert_eq!(args.model_dir, PathBuf::from("artifacts/nilemini-8m-situ"));
         assert_eq!(args.host, IpAddr::V4(Ipv4Addr::LOCALHOST));
