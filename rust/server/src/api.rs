@@ -2,7 +2,7 @@
 
 use axum::extract::rejection::JsonRejection;
 use axum::extract::State;
-use axum::response::{IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 
@@ -13,6 +13,8 @@ use crate::schema::{
 use crate::streaming;
 use crate::worker::InferenceWorker;
 
+const CHAT_UI: &str = include_str!("../static/index.html");
+
 #[derive(Clone, Debug)]
 struct AppState {
     worker: InferenceWorker,
@@ -21,11 +23,16 @@ struct AppState {
 /// Construct the complete HTTP application around an inference worker.
 pub fn router(worker: InferenceWorker) -> Router {
     Router::new()
+        .route("/", get(chat_ui))
         .route("/health", get(health))
         .route("/v1/models", get(models))
         .route("/v1/completions", post(completions))
         .route("/v1/chat/completions", post(chat_completions))
         .with_state(AppState { worker })
+}
+
+async fn chat_ui() -> Html<&'static str> {
+    Html(CHAT_UI)
 }
 
 async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
@@ -82,6 +89,34 @@ mod tests {
     use super::router;
     use crate::schema::{ErrorResponse, HealthResponse, ModelListResponse};
     use crate::worker::InferenceWorker;
+
+    #[tokio::test]
+    async fn root_serves_browser_chat_ui() {
+        let response = router(InferenceWorker::new())
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .body(Body::empty())
+                    .expect("valid request"),
+            )
+            .await
+            .expect("router response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let content_type = response
+            .headers()
+            .get("content-type")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        assert!(content_type.starts_with("text/html"));
+
+        let bytes = to_bytes(response.into_body(), 128 * 1024)
+            .await
+            .expect("read UI body");
+        let body = String::from_utf8(bytes.to_vec()).expect("UTF-8 UI");
+        assert!(body.contains("NileMini-8M-SiTU"));
+        assert!(body.contains("/v1/chat/completions"));
+    }
 
     #[tokio::test]
     async fn health_endpoint_reports_unloaded_test_worker() {
