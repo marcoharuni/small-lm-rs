@@ -1,54 +1,44 @@
 # Architecture
 
-`configs/model.json` is the cross-language numeric contract for NileMini-8M-SiTU.
+The bundled model is a small causal decoder. `configs/model.json` is the numeric contract shared by the JAX training code and the Rust runtime.
 
 | Property | Value |
 | --- | ---: |
+| Parameters | 7,999,744 |
 | Vocabulary | 8,192 |
 | Context | 512 |
-| Layers | 18 |
-| Hidden width | 640 |
-| FFN width | 1,664 |
-| Query heads | 10 |
+| Layers | 8 |
+| Hidden size | 256 |
+| FFN size | 704 |
+| Query heads | 4 |
 | KV heads | 2 |
 | Head dimension | 64 |
 | RoPE theta | 10,000 |
 | RMSNorm epsilon | 1e-5 |
-| SiTU beta gate/up | 4 / 25 |
-| Parameter count | 7,999,744 |
 
-The model is a causal pre-normalized decoder with GQA, interleaved RoPE, RMSNorm, SiTU-GLU, residual connections, and tied embeddings. It has no bias or dropout.
-
-## Exact block
+Each block is pre-normalized:
 
 ```text
-x
-├─ RMSNorm → Q/K/V → RoPE → causal GQA → O → + residual
-└─ RMSNorm → gate/up → SiTU-GLU product → down → + residual
+x -> RMSNorm -> Q/K/V -> RoPE -> causal GQA -> output projection -> residual
+  -> RMSNorm -> gated FFN -> down projection -> residual
 ```
 
-JAX keeps parameters FP32, casts matmul operands to BF16, requests FP32 accumulation, computes attention scores/softmax and normalization in FP32, and exports linear kernels transposed to `[out_features, in_features]` for Rust.
+The FFN uses SiTU-GLU with gate/up bounds of 4 and 25. Embeddings are tied to the output projection. The model has no bias or dropout.
 
-## System boundary
+JAX stores parameters in FP32 and uses BF16 operands for matrix products with FP32 accumulation. Exported linear weights use `[out_features, in_features]`, which is the layout consumed by the Rust engine.
+
+## Runtime boundary
 
 ```text
-frozen tokenizer + revision-pinned datasets
-                ↓
-         JAX train / SFT
-                ↓
-          Orbax checkpoints
-                ↓
-      FP32 SafeTensors export
-                ↓
-    independent Rust CPU engine
-                ↓
-       KV-cache + sampling
-                ↓
-      OpenAI-shaped HTTP API
+JAX training
+    |
+SafeTensors + tokenizer + JSON config
+    |
+Rust inference engine
+    |
+KV cache + sampling
+    |
+HTTP API
 ```
 
-The Rust engine does not call Python/JAX. SafeTensors plus JSON/tokenizer artifacts form the interchange boundary.
-
-## Parity
-
-The smoke artifact has already been used for end-to-end JAX↔Rust logit parity, cached-prefill/decode checks, and token-generation checks. Final trained weights must repeat the same parity gate after export; passing smoke parity does not prove the future trained checkpoint until that final check is run.
+The Rust runtime has no Python/JAX dependency during inference.
