@@ -1,75 +1,104 @@
 # Modal L4 Training
 
-`infra/modal_train.py` is the cloud entry point. It builds a pinned Python 3.12/JAX environment, copies the canonical source and frozen tokenizer into the image, and mounts a persistent Modal Volume at `/vol/nilemini`.
+`infra/modal_train.py` is the cloud entry point. It builds the pinned Python/JAX environment, mounts the canonical source and tokenizer, and uses a persistent Modal Volume at `/vol/nilemini` for prepared data, checkpoints, logs, and exports.
 
-## One-time authentication
+## Authentication
 
 ```bash
 uvx --from 'modal==1.5.3' modal setup
 ```
 
-FineWeb-Edu and SmolTalk are public. `HF_TOKEN` is not required by this launcher; you may use your own Hugging Face authentication outside the repository if rate limits require it.
+FineWeb-Edu and SmolTalk are public datasets. `HF_TOKEN` is optional, though authentication can improve Hugging Face rate limits.
 
-## Stages
+## v1.0.0 execution path
 
-Run the smoke first:
+The released 8M model was produced with the one-hour profiles, not the legacy larger planning profiles.
 
-```bash
-./scripts/modal_train.sh --stage smoke
-```
-
-That command prepares the 16K smoke data on CPU, commits it to the Volume, then allocates an L4 for the training run.
-
-Next:
+### 1. Probe
 
 ```bash
-./scripts/modal_train.sh --stage pilot
+./scripts/modal_train.sh --stage prepare-onehour-probe
+./scripts/modal_train.sh --stage onehour-probe
 ```
 
-`pilot` CPU-prepares the frozen 20M-token dataset, then runs/resumes the L4 job.
+The probe validated the exact 7,999,744-parameter architecture and measured healthy L4 throughput before the final run.
 
-Only after reviewing the pilot metrics:
+### 2. Final base preparation and pretraining
 
 ```bash
-./scripts/modal_train.sh --stage full
+./scripts/modal_train.sh --stage prepare-onehour-final
+./scripts/modal_train.sh --stage onehour-final
 ```
 
-The full stage CPU-prepares the 1.6B/10M packed token files before allocating the L4. The preparation and training data persist in the Volume.
+`onehour_final.json` contains the released training budget:
 
-After full pretraining:
+- 140,017,664 train tokens
+- 262,144 validation tokens
+- 4,273 updates
+- 32,768 tokens/update
+
+The final base checkpoint was written under:
+
+```text
+/vol/nilemini/checkpoints/pretrain/onehour-8m-final/final-params
+```
+
+### 3. SFT preparation and training
 
 ```bash
-./scripts/modal_train.sh --stage sft
-./scripts/modal_train.sh --stage export
+./scripts/modal_train.sh --stage prepare-onehour-sft
+./scripts/modal_train.sh --stage onehour-sft
 ```
 
-SFT preparation happens on CPU before its L4 job. Export restores the final SFT parameters and writes the SafeTensors package under `/vol/nilemini/exports/nilemini-8m-situ`.
+The released SFT profile contains:
 
-Individual preparation stages are also available:
+- 512 selected examples
+- 448 train examples
+- 64 validation examples
+- 56 updates
+
+The final SFT parameters were written under:
+
+```text
+/vol/nilemini/checkpoints/sft/onehour-8m-sft/final-params
+```
+
+### 4. Export
 
 ```bash
-./scripts/modal_train.sh --stage prepare-smoke
-./scripts/modal_train.sh --stage prepare-pilot
-./scripts/modal_train.sh --stage prepare-full
-./scripts/modal_train.sh --stage prepare-sft
+./scripts/modal_train.sh --stage onehour-export
 ```
+
+The exporter restores the final SFT parameters and writes the release package to:
+
+```text
+/vol/nilemini/exports/nilemini-8m-situ
+```
+
+The checked-in copy is `artifacts/nilemini-8m-situ/`.
 
 ## Durability
 
-Training functions can run for up to 24 hours per attempt. Every configured periodic checkpoint is followed by a Volume commit. A restarted/retried job reloads the Volume, discovers the newest numeric Orbax checkpoint, restores optimizer + parameter state, and continues from the recorded update/token count.
+Training jobs use periodic Orbax checkpoints followed by Modal Volume commits. Restarted or retried jobs reload the Volume, discover the newest numeric checkpoint, restore optimizer and parameter state, and continue from the recorded update.
 
-The full profile checkpoints every 250 updates, so interruptions do not require restarting 1.6B tokens from zero.
+The detached launch path uses Modal `.spawn()` for long-running GPU stages so a local client disconnect does not cancel the remote training function.
 
-## What to inspect after the pilot
+## Legacy profiles
 
-Before authorizing `--stage full`, inspect:
+The repository may retain smoke, pilot, `full_l4.json`, and `sft_l4.json` profiles as development and reproducibility references. The v1.0.0 weights were **not** trained with the 1.6B-token / 70k-example planning profiles. The authoritative release profiles are:
 
-- training loss trend
-- validation loss/perplexity
-- finite gradient norm
-- bounded/finite SiTU maximum
-- tokens/second and projected runtime
-- checkpoint creation and a deliberate resume test
-- L4 memory behavior / OOM status
+```text
+configs/training/onehour_final.json
+configs/training/onehour_sft.json
+```
 
-If the pilot is unhealthy, change the profile/code, rerun smoke/pilot, and do not spend on the full run.
+## Release verification
+
+After export, the final artifact is validated independently by the Rust engine:
+
+```bash
+cargo run --release -p nilemini-engine --example parity -- \
+  artifacts/nilemini-8m-situ
+```
+
+The v1.0.0 parity run was accepted with 10/10 top-1 agreement and no threshold violations.
