@@ -1,6 +1,7 @@
 //! Release benchmark for NileMini prompt prefill and KV-cached decoding.
 
 use std::error::Error;
+use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -17,9 +18,13 @@ struct BenchmarkReport {
     model_load_milliseconds: f64,
     prefill_milliseconds: f64,
     prefill_tokens_per_second: f64,
+    time_to_first_token_milliseconds: f64,
+    first_token_id: u32,
     decode_milliseconds: f64,
     decode_milliseconds_per_token: f64,
     decode_tokens_per_second: f64,
+    inter_token_latency_milliseconds: f64,
+    peak_rss_mebibytes: Option<f64>,
     final_cache_length: usize,
 }
 
@@ -28,6 +33,25 @@ fn parse_usize(index: usize, default: usize) -> Result<usize, Box<dyn Error>> {
         Some(value) => Ok(value.parse::<usize>()?),
         None => Ok(default),
     }
+}
+
+fn greedy_token(logits: &[f32]) -> Result<u32, Box<dyn Error>> {
+    let (index, _) = logits
+        .iter()
+        .copied()
+        .enumerate()
+        .max_by(|(_, left), (_, right)| left.total_cmp(right))
+        .ok_or("cannot select a token from empty logits")?;
+    Ok(u32::try_from(index)?)
+}
+
+fn peak_rss_mebibytes() -> Option<f64> {
+    // Linux exposes the process high-water resident set in /proc/self/status.
+    // Other platforms simply report null rather than inventing a value.
+    let status = fs::read_to_string("/proc/self/status").ok()?;
+    let line = status.lines().find(|line| line.starts_with("VmHWM:"))?;
+    let kib = line.split_whitespace().nth(1)?.parse::<f64>().ok()?;
+    Some(kib / 1024.0)
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -81,8 +105,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut cache = model.allocate_kv_cache(model.config().context_length)?;
 
-    // Warm one tiny projection path before timing the real workload so thread-pool
-    // initialization is not charged to the benchmark.
+    // Warm a tiny projection path before timing the declared workload so Rayon
+    // thread-pool initialization is not charged to prefill or TTFT.
     let mut warm_cache = model.allocate_kv_cache(2)?;
     let warm_logits = model.forward_prefill_with_cache(&prompt[..1], &mut warm_cache)?;
     std::hint::black_box(warm_logits);
@@ -90,6 +114,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let prefill_started = Instant::now();
     let prefill_logits = model.forward_prefill_with_cache(&prompt, &mut cache)?;
     let prefill_elapsed = prefill_started.elapsed();
+
+    let vocab_size = model.config().vocab_size;
+    let final_logits = &prefill_logits[prefill_logits.len() - vocab_size..];
+    let first_token = greedy_token(final_logits)?;
+    let ttft_elapsed = prefill_started.elapsed();
+    std::hint::black_box(first_token);
     std::hint::black_box(prefill_logits);
 
     let decode_started = Instant::now();
@@ -101,6 +131,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let prefill_seconds = prefill_elapsed.as_secs_f64();
     let decode_seconds = decode_elapsed.as_secs_f64();
+    let decode_ms_per_token = decode_seconds * 1_000.0 / decode_tokens as f64;
+
     let report = BenchmarkReport {
         model: model.config().model_name.clone(),
         rayon_threads: rayon::current_num_threads(),
@@ -109,9 +141,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         model_load_milliseconds: model_load_elapsed.as_secs_f64() * 1_000.0,
         prefill_milliseconds: prefill_seconds * 1_000.0,
         prefill_tokens_per_second: prompt_length as f64 / prefill_seconds,
+        time_to_first_token_milliseconds: ttft_elapsed.as_secs_f64() * 1_000.0,
+        first_token_id: first_token,
         decode_milliseconds: decode_seconds * 1_000.0,
-        decode_milliseconds_per_token: decode_seconds * 1_000.0 / decode_tokens as f64,
+        decode_milliseconds_per_token: decode_ms_per_token,
         decode_tokens_per_second: decode_tokens as f64 / decode_seconds,
+        inter_token_latency_milliseconds: decode_ms_per_token,
+        peak_rss_mebibytes: peak_rss_mebibytes(),
         final_cache_length: cache.sequence_length(),
     };
     println!("{}", serde_json::to_string_pretty(&report)?);
