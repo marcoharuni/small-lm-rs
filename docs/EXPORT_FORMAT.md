@@ -1,9 +1,9 @@
-# Export Format
+# Export format
 
-The JAX exporter writes the artifact contract consumed by `nilemini-engine`:
+The JAX exporter writes the files consumed by the Rust engine:
 
 ```text
-nilemini-8m-situ/
+artifacts/nilemini-8m-situ/
 ├── model.safetensors
 ├── tokenizer.json
 ├── config.json
@@ -14,11 +14,11 @@ nilemini-8m-situ/
 └── SHA256SUMS
 ```
 
-The final v1.0.0 package is checked in at `artifacts/nilemini-8m-situ/`.
+The directory name and model ID are retained as part of the existing artifact contract.
 
-All exported model tensors are FP32. JAX linear kernels are transposed to `[out_features, in_features]` for the Rust engine.
+All model tensors are exported as FP32. Linear kernels are transposed to `[out_features, in_features]` for the Rust runtime.
 
-For each layer `N`, tensor names are:
+Layer tensor names follow:
 
 ```text
 layers.N.attention_norm.weight
@@ -39,27 +39,19 @@ token_embedding.weight
 final_norm.weight
 ```
 
-The tied output projection reuses `token_embedding.weight`; there is no duplicate LM-head tensor.
+The output projection reuses `token_embedding.weight`.
 
-## Release artifact facts
+Artifact facts:
 
-- logical tensor element count: **7,999,744**
-- exported tensors: **74**
-- FP32 weight size: **30.52 MiB**
-- model name: `nilemini-8m-situ`
+```text
+parameters       7,999,744
+tensors          74
+FP32 weights     30.52 MiB
+```
 
-`SHA256SUMS` and `manifest.json` provide integrity metadata. `reference_inputs.json` and `reference_outputs.safetensors` provide the frozen JAX fixture used for independent Rust parity validation.
-
-Verify locally:
+Verify checksums:
 
 ```bash
 cd artifacts/nilemini-8m-situ
 sha256sum -c SHA256SUMS
-```
-
-Run the cross-language parity check:
-
-```bash
-cargo run --release -p nilemini-engine --example parity -- \
-  artifacts/nilemini-8m-situ
 ```
