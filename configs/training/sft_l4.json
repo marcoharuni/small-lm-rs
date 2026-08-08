@@ -1,0 +1,19 @@
+{
+  "name": "sft-l4-70k",
+  "seed": 42,
+  "selected_examples": 70000,
+  "train_examples": 68000,
+  "validation_examples": 2000,
+  "batch_size": 8,
+  "microbatch_sequences": 1,
+  "optimizer": {
+    "muon_learning_rate": 0.003,
+    "adam_learning_rate": 5e-05,
+    "weight_decay": 0.01,
+    "warmup_fraction": 0.02,
+    "gradient_clip_norm": 1.0
+  },
+  "validate_every_updates": 1000,
+  "checkpoint_every_updates": 250,
+  "log_every_updates": 25
+}

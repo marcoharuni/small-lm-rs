@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "description": "Static smoke prompts for a future correctness-oriented benchmark harness; these are inputs, not results.",
+  "prompts": [
+    {
+      "id": "short-factual",
+      "category": "basic_knowledge",
+      "prompt": "Name the largest planet in the Solar System in one sentence."
+    },
+    {
+      "id": "short-reasoning",
+      "category": "basic_reasoning",
+      "prompt": "A box has three red balls and two blue balls. How many balls are in the box? Explain briefly."
+    },
+    {
+      "id": "short-code",
+      "category": "basic_code",
+      "prompt": "Write a Python function that returns the square of an integer."
+    }
+  ]
+}

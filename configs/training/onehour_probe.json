@@ -1,0 +1,20 @@
+{
+  "name": "onehour-8m-probe",
+  "seed": 42,
+  "train_tokens": 8388608,
+  "validation_tokens": 262144,
+  "global_sequences": 64,
+  "microbatch_sequences": 8,
+  "validation_sequences": 16,
+  "validate_every_updates": 128,
+  "checkpoint_every_updates": 128,
+  "log_every_updates": 16,
+  "tokenizer_bytes": 30000000,
+  "optimizer": {
+    "muon_learning_rate": 0.02,
+    "adam_learning_rate": 0.0003,
+    "weight_decay": 0.1,
+    "warmup_fraction": 0.02,
+    "gradient_clip_norm": 1.0
+  }
+}

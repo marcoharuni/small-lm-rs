@@ -1,0 +1,81 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nilemini"
+version = "0.1.0"
+description = "JAX training and reference tooling for NileMini-8M-SiTU"
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+license = "Apache-2.0"
+authors = [{ name = "marcoharuni" }]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+dependencies = [
+  "datasets>=5.0.1,<6",
+  "flax>=0.12.8,<0.13",
+  "jax>=0.11.0,<0.12",
+  "numpy>=2.5.1,<3",
+  "optax>=0.2.8,<0.3",
+  "orbax-checkpoint>=0.12.2,<0.13",
+  "safetensors>=0.8.0,<0.9",
+  "tokenizers>=0.23.1,<0.24",
+]
+
+[project.scripts]
+nilemini = "nilemini.cli:main"
+nilemini-train-tokenizer = "nilemini.tokenizer:main"
+nilemini-prepare-data = "nilemini.data:main"
+nilemini-pretrain = "nilemini.pretrain:main"
+nilemini-sft = "nilemini.sft:main"
+nilemini-evaluate = "nilemini.evaluate:main"
+nilemini-export = "nilemini.export:main"
+
+[dependency-groups]
+dev = [
+  { include-group = "test" },
+  "mypy>=2.3,<3",
+  "ruff>=0.16,<0.17",
+]
+test = ["pytest>=9.0,<10"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nilemini"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/nilemini", "tests"]
+pretty = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["optax", "optax.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+  "api: tests that require a running NileMini server",
+  "parity: JAX-Rust numerical parity tests",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "RUF", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["nilemini"]

@@ -1,0 +1,30 @@
+[workspace]
+members = ["rust/engine", "rust/server"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "Apache-2.0"
+repository = "https://github.com/marcoharuni/nilemini-rs"
+
+[workspace.dependencies]
+axum = "0.8.4"
+clap = { version = "4.5.41", features = ["derive"] }
+safetensors = "0.6.2"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.141"
+thiserror = "2.0.12"
+tokenizers = "0.21.4"
+tokio = { version = "1.46.1", features = ["macros", "net", "rt-multi-thread", "signal"] }
+tower = { version = "0.5.2", features = ["util"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

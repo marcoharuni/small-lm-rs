@@ -1,0 +1,34 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+target/
+data/
+checkpoints/
+runs/
+exports/
+*.safetensors
+*.bin
+.env
+.DS_Store
+
+# Generated tokenizer artifacts (keep only reviewed metadata in Git)
+artifacts/**/tokenizer/
+artifacts/**/tokenizer.json
+
+# Local editor and notebook state
+.idea/
+.vscode/
+.ipynb_checkpoints/
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+*.py[cod]
+
+# Coverage and local reports
+.coverage
+htmlcov/
+coverage.xml

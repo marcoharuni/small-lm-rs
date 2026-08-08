@@ -1,0 +1,13 @@
+{
+  "files": {
+    "config.json": "981461174fc105d0f9fec1f63a3a39f34231490ee137ad8bc8b582b6c8e77b00",
+    "generation_config.json": "beffd51719aef86437658ad8b09d4c0fe7764fb008647ee71585f8577d34e45c",
+    "model.safetensors": "f568678d8d3e7af5bae50eb23f2e9be2a9f016ee3b88295058ba824680854b81",
+    "reference_inputs.json": "a27ce0dd95f38b39f05dc380354b023f5b1a703295ad5658624358a4b9615d0f",
+    "reference_outputs.safetensors": "1adfed852da4025c27842cdf9ff53bd07cfcb56d2d7a54e5e0e0e6bded015c45",
+    "tokenizer.json": "b053a986af42c0f98ff8b73b75b449b0c843a527acb2f75b19d23d0bcd09465a"
+  },
+  "model_name": "nilemini-8m-situ",
+  "parameter_count": 7999744,
+  "tokenizer_sha256": "b053a986af42c0f98ff8b73b75b449b0c843a527acb2f75b19d23d0bcd09465a"
+}

@@ -1,0 +1,20 @@
+{
+  "name": "full-l4-1p6b",
+  "seed": 42,
+  "train_tokens": 1600000000,
+  "validation_tokens": 10000000,
+  "global_sequences": 32,
+  "microbatch_sequences": 2,
+  "validation_sequences": 8,
+  "validate_every_updates": 10000,
+  "checkpoint_every_updates": 250,
+  "log_every_updates": 25,
+  "tokenizer_bytes": 30000000,
+  "optimizer": {
+    "muon_learning_rate": 0.02,
+    "adam_learning_rate": 0.0003,
+    "weight_decay": 0.1,
+    "warmup_fraction": 0.02,
+    "gradient_clip_norm": 1.0
+  }
+}

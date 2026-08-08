@@ -1,0 +1,20 @@
+{
+  "name": "pilot-l4-20m",
+  "seed": 42,
+  "train_tokens": 20000000,
+  "validation_tokens": 1000000,
+  "global_sequences": 32,
+  "microbatch_sequences": 2,
+  "validation_sequences": 8,
+  "validate_every_updates": 500,
+  "checkpoint_every_updates": 100,
+  "log_every_updates": 10,
+  "tokenizer_bytes": 30000000,
+  "optimizer": {
+    "muon_learning_rate": 0.02,
+    "adam_learning_rate": 0.0003,
+    "weight_decay": 0.1,
+    "warmup_fraction": 0.02,
+    "gradient_clip_norm": 1.0
+  }
+}

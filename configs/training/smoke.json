@@ -1,0 +1,20 @@
+{
+  "name": "smoke",
+  "seed": 42,
+  "train_tokens": 16384,
+  "validation_tokens": 4096,
+  "global_sequences": 2,
+  "microbatch_sequences": 1,
+  "validation_sequences": 1,
+  "validate_every_updates": 4,
+  "checkpoint_every_updates": 8,
+  "log_every_updates": 1,
+  "tokenizer_bytes": 30000000,
+  "optimizer": {
+    "muon_learning_rate": 0.02,
+    "adam_learning_rate": 0.0003,
+    "weight_decay": 0.1,
+    "warmup_fraction": 0.02,
+    "gradient_clip_norm": 1.0
+  }
+}
