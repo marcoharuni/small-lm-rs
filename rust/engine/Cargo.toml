@@ -1,6 +1,6 @@
 [package]
 name = "nilemini-engine"
-description = "Scaffold for the NileMini CPU inference engine"
+description = "Independent Rust CPU inference engine for NileMini"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,6 +9,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+rayon.workspace = true
 safetensors.workspace = true
 serde.workspace = true
 serde_json.workspace = true
