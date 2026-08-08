@@ -215,7 +215,6 @@ infra/modal_train.py           Modal L4 workflow
 rust/engine/                   Independent Rust CPU inference engine
 rust/server/                   OpenAI-compatible API + browser chat
 artifacts/nilemini-8m-situ/    Final trained artifact
-docs/DEMO.md                   Short demo/video walkthrough
 ```
 
 ## Verification
@@ -247,10 +246,6 @@ cargo run --release -p nilemini-engine --example parity -- \
 ```
 
 Some expensive real-artifact integration tests are intentionally ignored in the default debug test suite and document their release-mode requirements. The explicit parity command above exercises the final trained artifact in release mode.
-
-## Demo
-
-A 3–5 minute reproducible presentation flow is in [`docs/DEMO.md`](docs/DEMO.md): artifact checksum → JAX/Rust parity → Rust server → browser chat → API request.
 
 ## Scope
 
