@@ -1,26 +1,29 @@
-# Data Card
+# Data
 
-## Frozen sources
+## Pretraining
 
-| Stage | Source | Config | Revision | Planned budget |
-| --- | --- | --- | --- | ---: |
-| Pretraining | `HuggingFaceFW/fineweb-edu` | `sample-10BT` | `87f09149ef4734204d70ed1d046ddc9ca3f2b8f9` | 1.6B train + 10M validation tokens |
-| SFT | `HuggingFaceTB/smoltalk` | `smol-magpie-ultra` | `5feaf2fd3ffca7c237fc38d1861bc30365d48ffa` | 70k selected examples |
+The released base model uses `HuggingFaceFW/fineweb-edu`, config `sample-10BT`, pinned to revision:
 
-The real full dataset materialization/training run is still pending. Small smoke data has been used to validate the engineering pipeline.
+```text
+87f09149ef4734204d70ed1d046ddc9ca3f2b8f9
+```
 
-## Pretraining processing
+The training stream contains 140,017,664 tokens and the validation set contains 262,144 tokens.
 
-FineWeb-Edu is streamed from the pinned revision. Empty text is rejected. A stable document identifier is taken from `id`, then URL, then SHA-256 of text. SHA-256 assigns documents deterministically to a 99% train / 1% validation split. Text is encoded with the frozen BPE, EOS is appended per document, and tokens are packed contiguously into little-endian uint16 files until each exact budget is reached.
+Documents are split deterministically from a stable document identifier using SHA-256. Text is encoded with the frozen BPE tokenizer, EOS is appended per document, and token IDs are packed as little-endian `uint16` values.
 
-Prepared-data manifests record dataset/config/revision, tokenizer SHA-256, exact token counts, and dtype. Existing files are reused only when their manifest and byte sizes match the selected profile.
+## Instruction tuning
 
-## SFT processing
+Instruction tuning uses `HuggingFaceTB/smoltalk`, config `smol-magpie-ultra`, pinned to revision:
 
-SmolTalk rows with tools or images are rejected. Message JSON is canonicalized and SHA-256 deduplicated. Conversations must contain at most one leading system message followed by alternating user/assistant messages and end in assistant. Over-context examples are rejected. Loss masking includes assistant content and assistant EOS only.
+```text
+5feaf2fd3ffca7c237fc38d1861bc30365d48ffa
+```
 
-The first 70,000 valid unique examples from the pinned stream are split 68,000 train / 2,000 validation.
+The configured preprocessing pipeline produced 2,163 valid examples. From that pool, 512 were selected deterministically: 448 for training and 64 for validation.
 
-## Risks and release review
+Rows containing tools or image payloads are excluded. Conversations are deduplicated and checked for valid role ordering. Loss is applied to assistant content and assistant EOS tokens only.
 
-Web and instruction corpora can contain copyrighted, private, offensive, inaccurate, duplicated, or biased material. Source filtering does not eliminate these risks. Before publishing final trained weights, the exact run should receive licensing, privacy/memorization, safety/bias, and held-out quality review. Raw/prepared data remain outside Git.
+## Notes
+
+Web and instruction datasets can contain inaccurate, biased, offensive, duplicated, copyrighted, or private material. The small model in this repository has not been evaluated as a production assistant and should not be treated as one.
