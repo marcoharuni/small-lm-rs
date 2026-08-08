@@ -16,14 +16,14 @@
 
     .page {
       width: min(720px, calc(100% - 24px));
-      margin: 32px auto;
+      margin: 28px auto;
     }
 
     header {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      padding-bottom: 12px;
+      padding-bottom: 10px;
       border-bottom: 1px solid #d8d8d8;
     }
 
@@ -41,27 +41,27 @@
     #status.ready { color: #247a3c; }
 
     #chat {
-      min-height: 420px;
-      max-height: 65vh;
+      min-height: 140px;
+      max-height: 52vh;
       overflow-y: auto;
-      padding: 24px 0 12px;
+      padding: 18px 0 6px;
     }
 
     .empty {
       color: #888;
       font-size: 14px;
-      padding-top: 20px;
+      padding: 8px 0 18px;
     }
 
     .message {
-      margin-bottom: 22px;
+      margin-bottom: 18px;
       line-height: 1.5;
       font-size: 15px;
     }
 
     .message strong {
       display: block;
-      margin-bottom: 5px;
+      margin-bottom: 4px;
       font-size: 13px;
     }
 
@@ -77,12 +77,12 @@
 
     .composer {
       border-top: 1px solid #d8d8d8;
-      padding-top: 14px;
+      padding-top: 12px;
     }
 
     textarea {
       width: 100%;
-      min-height: 74px;
+      min-height: 70px;
       resize: vertical;
       padding: 10px;
       border: 1px solid #bbb;
@@ -95,10 +95,42 @@
 
     textarea:focus { border-color: #777; }
 
-    .buttons {
+    .toolbar {
       display: flex;
       justify-content: space-between;
+      align-items: center;
+      gap: 12px;
       margin-top: 8px;
+    }
+
+    .settings {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    input[type="number"] {
+      width: 66px;
+      padding: 6px;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      background: #fff;
+      color: #222;
+      font: inherit;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 8px;
     }
 
     button {
@@ -123,14 +155,16 @@
     #send:hover { background: #444; }
 
     .note {
-      margin-top: 10px;
+      margin-top: 9px;
       color: #999;
       font-size: 12px;
     }
 
     @media (max-width: 600px) {
-      .page { margin-top: 16px; }
-      #chat { min-height: 360px; }
+      .page { margin-top: 14px; }
+      #chat { min-height: 120px; max-height: 48vh; }
+      .toolbar { align-items: flex-end; }
+      .settings { gap: 7px; }
     }
   </style>
 </head>
@@ -147,10 +181,25 @@
 
     <section class="composer">
       <textarea id="prompt" placeholder="Type a message..." autofocus></textarea>
-      <div class="buttons">
-        <button id="clear" type="button">Clear</button>
-        <button id="send" type="button">Send</button>
+
+      <div class="toolbar">
+        <div class="settings">
+          <label>
+            Tokens
+            <input id="maxTokens" type="number" min="1" max="128" step="1" value="32">
+          </label>
+          <label>
+            Temp
+            <input id="temperature" type="number" min="0" max="2" step="0.1" value="0">
+          </label>
+        </div>
+
+        <div class="buttons">
+          <button id="clear" type="button">Clear</button>
+          <button id="send" type="button">Send</button>
+        </div>
       </div>
+
       <div class="note">NileMini-8M-SiTU · local Rust inference</div>
     </section>
   </main>
@@ -161,6 +210,8 @@
     const send = document.getElementById('send');
     const clear = document.getElementById('clear');
     const status = document.getElementById('status');
+    const maxTokens = document.getElementById('maxTokens');
+    const temperature = document.getElementById('temperature');
 
     let model = 'nilemini-8m-situ';
     let messages = [];
@@ -212,14 +263,17 @@
       const answer = addMessage('assistant', '...');
 
       try {
+        const tokens = Math.max(1, Math.min(128, Number(maxTokens.value) || 32));
+        const temp = Math.max(0, Math.min(2, Number(temperature.value) || 0));
+
         const response = await fetch('/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model,
             messages,
-            max_tokens: 32,
-            temperature: 0.0,
+            max_tokens: tokens,
+            temperature: temp,
             top_p: 1.0,
             top_k: 0,
             seed: 0
