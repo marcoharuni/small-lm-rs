@@ -1,7 +1,6 @@
 # NileMini HTTP API
 
-The Rust server loads the model, tokenizer, and generation metadata once at
-startup and exposes a local OpenAI-compatible subset.
+The Rust server loads the model, tokenizer, and generation metadata once at startup and exposes both a local browser chat page and an OpenAI-compatible API subset.
 
 ```bash
 cargo run --release --package nilemini-server -- \
@@ -10,8 +9,19 @@ cargo run --release --package nilemini-server -- \
   --port 8080
 ```
 
-Keep the server on loopback. Authentication, TLS, quotas, and multi-tenant
-hardening are not implemented.
+Keep the server on loopback. Authentication, TLS, quotas, and multi-tenant hardening are not implemented.
+
+## Browser chat
+
+Open:
+
+```text
+http://127.0.0.1:8080/
+```
+
+The page is embedded directly into the Rust server binary and talks to the same `/health` and `/v1/chat/completions` endpoints documented below. No Node.js frontend, separate web server, or CORS configuration is required.
+
+The UI keeps the current conversation in browser memory, exposes `max_tokens` and `temperature`, shows token usage returned by the API, and includes a clear-conversation control.
 
 ## `GET /health`
 
@@ -44,9 +54,7 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   }'
 ```
 
-Supported roles are `system`, `user`, and `assistant`. The frozen chat template
-allows a system message only at index zero and requires the final message to be
-from the user.
+Supported roles are `system`, `user`, and `assistant`. The frozen chat template allows a system message only at index zero and requires the final message to be from the user.
 
 ## `POST /v1/completions`
 
@@ -80,18 +88,16 @@ Set `"stream": true` to receive `text/event-stream` frames ending with:
 data: [DONE]
 ```
 
-The current synchronous CPU service completes generation before emitting the
-SSE body. The wire contract is client-compatible; token-time delivery and
-disconnect-aware cancellation remain later optimizations.
+The current synchronous CPU service completes generation before emitting the SSE body. The wire contract is client-compatible; token-time delivery and disconnect-aware cancellation remain later optimizations.
 
 ## Concurrency
 
-HTTP handling is asynchronous. CPU inference runs on Tokio's blocking pool and
-is serialized through the loaded service. Each generation invocation creates a
-fresh KV cache, so decoding state is never shared between requests.
+HTTP handling is asynchronous. CPU inference runs on Tokio's blocking pool and is serialized through the loaded service. Each generation invocation creates a fresh KV cache, so decoding state is never shared between requests.
 
 ## End-to-end smoke test
 
 ```bash
 ./scripts/smoke_server.sh artifacts/nilemini-8m-situ
 ```
+
+For a short presentation workflow, see [`DEMO.md`](DEMO.md).
