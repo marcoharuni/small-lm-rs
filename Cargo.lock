@@ -694,6 +694,7 @@ dependencies = [
 name = "nilemini-engine"
 version = "0.1.0"
 dependencies = [
+ "rayon",
  "safetensors",
  "serde",
  "serde_json",
