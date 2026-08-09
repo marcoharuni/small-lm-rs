@@ -29,10 +29,12 @@ pub(crate) fn round_to_bfloat16(value: f32) -> f32 {
 /// shape `[rows, out_features]`.
 ///
 /// Output elements are independent, so release inference distributes them
-/// across Rayon's CPU worker pool. The accumulation order inside each dot
+/// across Rayon's CPU worker pool. Inputs are rounded to their BF16-equivalent
+/// values once per projection and reused by every output dot product instead
+/// of repeating the same conversion for each output neuron. Weights are still
+/// rounded at multiplication time. The accumulation order inside each dot
 /// product is unchanged, preserving the numerical contract used by parity
-/// tests. Inputs and weights are rounded to bfloat16 before multiplication,
-/// while accumulation remains FP32 to follow the JAX reference computation.
+/// tests, and accumulation remains FP32 to follow the JAX reference.
 ///
 /// # Errors
 ///
@@ -48,6 +50,11 @@ pub fn linear(
     validate_matrix("linear input", input, rows, in_features)?;
     validate_matrix("linear weight", weight, out_features, in_features)?;
 
+    let rounded_input = input
+        .iter()
+        .copied()
+        .map(round_to_bfloat16)
+        .collect::<Vec<_>>();
     let output_len = checked_matrix_len("linear output", rows, out_features)?;
     let mut output = vec![0.0_f32; output_len];
 
@@ -58,14 +65,14 @@ pub fn linear(
             let row_index = flat_index / out_features;
             let output_index = flat_index % out_features;
             let input_start = row_index * in_features;
-            let input_row = &input[input_start..input_start + in_features];
+            let input_row = &rounded_input[input_start..input_start + in_features];
             let weight_start = output_index * in_features;
             let weight_row = &weight[weight_start..weight_start + in_features];
 
             *output_value = input_row.iter().zip(weight_row).fold(
                 0.0_f32,
                 |sum, (&input_value, &weight_value)| {
-                    round_to_bfloat16(input_value).mul_add(round_to_bfloat16(weight_value), sum)
+                    input_value.mul_add(round_to_bfloat16(weight_value), sum)
                 },
             );
         });
@@ -93,6 +100,29 @@ mod tests {
         ];
         let output = linear(&input, 1, 2, &weight, 2).expect("valid projection");
         assert_eq!(output, vec![11.0, 17.0]);
+    }
+
+    #[test]
+    fn projection_reuses_bfloat16_rounded_inputs_without_changing_results() {
+        let input = [1.003_906_2_f32, -0.996_093_75_f32];
+        let weight = [
+            0.333_984_38_f32, 0.667_968_75_f32, //
+            -0.25_f32, 0.125_f32,
+        ];
+        let output = linear(&input, 1, 2, &weight, 2).expect("valid projection");
+
+        let expected = weight
+            .chunks_exact(2)
+            .map(|row| {
+                round_to_bfloat16(input[0])
+                    .mul_add(
+                        round_to_bfloat16(row[0]),
+                        round_to_bfloat16(input[1]) * round_to_bfloat16(row[1]),
+                    )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(output, expected);
     }
 
     #[test]
