@@ -29,4 +29,4 @@ This model is mainly a test bed for training/export/runtime work. Its small para
 
 The exported JAX reference and Rust implementation agree on all 10 reference top-1 predictions. The complete parity report is in `parity.md` and `parity_report.json`.
 
-The artifact keeps the model ID `nilemini-8m-situ` for compatibility with its exported manifest and tests.
+The bundled model identifier is `small-lm-8m`.
