@@ -8,7 +8,7 @@ use nilemini_engine::generation_config::GenerationConfig;
 use nilemini_engine::tokenizer::{NileTokenizer, SpecialTokenIds};
 
 fn artifact_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/nilemini-8m-situ")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m")
 }
 
 #[test]
