@@ -1,4 +1,4 @@
-"""Canonical NileMini architecture, datasets, and resolved training profiles."""
+"""Canonical small language model architecture, datasets, and resolved training profiles."""
 
 from __future__ import annotations
 
@@ -27,14 +27,14 @@ SPECIAL_TOKENS = (
 
 
 class ConfigurationError(ValueError):
-    """Raised when a NileMini configuration is invalid."""
+    """Raised when a model configuration is invalid."""
 
 
 @dataclass(frozen=True, slots=True)
 class ModelConfig:
     """Frozen decoder architecture shared by JAX training and Rust inference."""
 
-    model_name: str = "nilemini-8m-situ"
+    model_name: str = "small-lm-8m"
     architecture: str = "decoder-only-transformer"
     vocab_size: int = 8192
     context_length: int = 512
@@ -82,13 +82,11 @@ class ModelConfig:
         if self.rms_norm_epsilon <= 0.0 or self.rope_theta <= 0.0:
             raise ConfigurationError("RMSNorm epsilon and RoPE theta must be positive")
         if self.situ_beta_gate <= 0.0 or self.situ_beta_up <= 0.0:
-            raise ConfigurationError("SiTU beta values must be positive")
+            raise ConfigurationError("bounded-gate beta values must be positive")
         if not 0.0 <= self.dropout < 1.0:
             raise ConfigurationError("dropout must be in [0, 1)")
         if not self.tie_word_embeddings or self.use_bias or self.dropout != 0.0:
-            raise ConfigurationError(
-                "NileMini-v1 requires tied embeddings, no bias, and no dropout"
-            )
+            raise ConfigurationError("small-lm-v1 requires tied embeddings, no bias, and no dropout")
         if self.calculated_parameter_count != self.expected_parameter_count:
             raise ConfigurationError(
                 "expected_parameter_count does not match the configured architecture: "
