@@ -45,14 +45,14 @@ jobs:
         run: uv run --frozen pytest
 
   msrv:
-    name: Rust 1.80 MSRV
+    name: Rust 1.85 MSRV
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install Rust 1.80
-        uses: dtolnay/rust-toolchain@1.80.0
+      - name: Install Rust 1.85
+        uses: dtolnay/rust-toolchain@1.85.0
       - name: Check workspace
         run: cargo check --locked --workspace --all-targets
 
