@@ -3,7 +3,7 @@
 The JAX exporter writes the files consumed by the Rust engine:
 
 ```text
-artifacts/nilemini-8m-situ/
+artifacts/small-lm-8m/
 ├── model.safetensors
 ├── tokenizer.json
 ├── config.json
@@ -14,7 +14,7 @@ artifacts/nilemini-8m-situ/
 └── SHA256SUMS
 ```
 
-The directory name and model ID are retained as part of the existing artifact contract.
+The bundled model identifier is `small-lm-8m`.
 
 All model tensors are exported as FP32. Linear kernels are transposed to `[out_features, in_features]` for the Rust runtime.
 
@@ -52,6 +52,6 @@ FP32 weights     30.52 MiB
 Verify checksums:
 
 ```bash
-cd artifacts/nilemini-8m-situ
+cd artifacts/small-lm-8m
 sha256sum -c SHA256SUMS
 ```
