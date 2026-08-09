@@ -19,7 +19,7 @@ def test_chat_completions_returns_a_valid_response() -> None:
         f"{server_url.rstrip('/')}/v1/chat/completions",
         data=json.dumps(
             {
-                "model": "nilemini-8m-situ",
+                "model": "small-lm-8m",
                 "messages": [{"role": "user", "content": "Hello"}],
                 "max_tokens": 1,
                 "temperature": 0.0,
@@ -32,6 +32,6 @@ def test_chat_completions_returns_a_valid_response() -> None:
     with urlopen(request, timeout=120) as response:
         payload = json.loads(response.read())
     assert payload["object"] == "chat.completion"
-    assert payload["model"] == "nilemini-8m-situ"
+    assert payload["model"] == "small-lm-8m"
     assert len(payload["choices"]) == 1
     assert payload["choices"][0]["message"]["role"] == "assistant"
