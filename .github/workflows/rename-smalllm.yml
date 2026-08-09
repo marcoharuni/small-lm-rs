@@ -88,7 +88,6 @@ jobs:
                   path.write_text(text, encoding="utf-8")
                   changed.append(raw_path)
 
-          # Preserve the requested public spelling in user-facing docs.
           for raw_path in ["README.md", "docs/TRAINING.md", "docs/MODAL_TRAINING.md", "configs/README.md"]:
               path = Path(raw_path)
               if path.exists():
@@ -165,6 +164,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cargo fmt --all
           cargo fmt --all -- --check
           cargo clippy --workspace --all-targets -- -D warnings
           cargo test --workspace
