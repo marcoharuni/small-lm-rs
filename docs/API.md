@@ -32,7 +32,7 @@ A ready server returns the loaded model identifier and `service: small-lm-rs`.
 GET /v1/models
 ```
 
-The bundled artifact uses the compatibility identifier `nilemini-8m-situ`.
+The bundled model identifier is `small-lm-8m`.
 
 ## Chat completions
 
@@ -40,7 +40,7 @@ The bundled artifact uses the compatibility identifier `nilemini-8m-situ`.
 curl http://127.0.0.1:8080/v1/chat/completions \
   -H 'content-type: application/json' \
   -d '{
-    "model": "nilemini-8m-situ",
+    "model": "small-lm-8m",
     "messages": [{"role": "user", "content": "Hello"}],
     "max_tokens": 16,
     "temperature": 0.0
@@ -55,7 +55,7 @@ Supported roles are `system`, `user`, and `assistant`.
 curl http://127.0.0.1:8080/v1/completions \
   -H 'content-type: application/json' \
   -d '{
-    "model": "nilemini-8m-situ",
+    "model": "small-lm-8m",
     "prompt": "Hello",
     "max_tokens": 16,
     "temperature": 0.0
