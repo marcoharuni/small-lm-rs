@@ -31,9 +31,11 @@ pub(crate) fn round_to_bfloat16(value: f32) -> f32 {
 ///
 /// Output elements are independent, so release inference distributes them
 /// across Rayon's CPU worker pool. Inputs are rounded once per projection and
-/// reused by every output dot product instead of repeating the same conversion
-/// for each output neuron. Weights are rounded at multiplication time. The
-/// accumulation order inside each dot product is unchanged.
+/// reused by every output dot product. Multi-row prefill also rounds the weight
+/// matrix once per projection instead of repeating the same conversion for
+/// every sequence row. Single-row cached decode keeps the allocation-free
+/// inline weight conversion path. The accumulation order inside each dot
+/// product is unchanged.
 ///
 /// # Errors
 ///
@@ -57,24 +59,49 @@ pub fn linear(
     let output_len = checked_matrix_len("linear output", rows, out_features)?;
     let mut output = vec![0.0_f32; output_len];
 
-    output
-        .par_iter_mut()
-        .enumerate()
-        .for_each(|(flat_index, output_value)| {
-            let row_index = flat_index / out_features;
-            let output_index = flat_index % out_features;
-            let input_start = row_index * in_features;
-            let input_row = &rounded_input[input_start..input_start + in_features];
-            let weight_start = output_index * in_features;
-            let weight_row = &weight[weight_start..weight_start + in_features];
+    if rows > 1 {
+        let rounded_weight = weight
+            .iter()
+            .copied()
+            .map(round_to_bfloat16)
+            .collect::<Vec<_>>();
 
-            *output_value = input_row.iter().zip(weight_row).fold(
-                0.0_f32,
-                |sum, (&input_value, &weight_value)| {
-                    input_value.mul_add(round_to_bfloat16(weight_value), sum)
-                },
-            );
-        });
+        output
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(flat_index, output_value)| {
+                let row_index = flat_index / out_features;
+                let output_index = flat_index % out_features;
+                let input_start = row_index * in_features;
+                let input_row = &rounded_input[input_start..input_start + in_features];
+                let weight_start = output_index * in_features;
+                let weight_row = &rounded_weight[weight_start..weight_start + in_features];
+
+                *output_value = input_row
+                    .iter()
+                    .zip(weight_row)
+                    .fold(0.0_f32, |sum, (&input_value, &weight_value)| {
+                        input_value.mul_add(weight_value, sum)
+                    });
+            });
+    } else {
+        output
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(flat_index, output_value)| {
+                let output_index = flat_index % out_features;
+                let input_row = &rounded_input[..in_features];
+                let weight_start = output_index * in_features;
+                let weight_row = &weight[weight_start..weight_start + in_features];
+
+                *output_value = input_row.iter().zip(weight_row).fold(
+                    0.0_f32,
+                    |sum, (&input_value, &weight_value)| {
+                        input_value.mul_add(round_to_bfloat16(weight_value), sum)
+                    },
+                );
+            });
+    }
 
     Ok(output)
 }
@@ -168,6 +195,36 @@ mod tests {
                 sum
             })
             .collect::<Vec<_>>();
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn multirow_projection_reuses_rounded_weights_without_changing_results() {
+        let input = [
+            1.003_906_2_f32,
+            -0.996_093_75_f32,
+            0.503_906_25_f32,
+            1.996_093_8_f32,
+        ];
+        let weight = [
+            0.333_984_38_f32,
+            0.667_968_75_f32, //
+            -0.251_953_12_f32,
+            0.126_953_12_f32,
+        ];
+        let output = linear(&input, 2, 2, &weight, 2).expect("valid projection");
+
+        let mut expected = Vec::new();
+        for input_row in input.chunks_exact(2) {
+            for weight_row in weight.chunks_exact(2) {
+                let sum = round_to_bfloat16(input_row[0]).mul_add(
+                    round_to_bfloat16(weight_row[0]),
+                    round_to_bfloat16(input_row[1]) * round_to_bfloat16(weight_row[1]),
+                );
+                expected.push(sum);
+            }
+        }
 
         assert_eq!(output, expected);
     }
