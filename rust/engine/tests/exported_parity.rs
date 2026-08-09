@@ -8,8 +8,7 @@ use nilemini_engine::{ModelConfig, NileMiniModel};
 #[test]
 #[ignore = "requires the local 30.52 MiB model and a release CPU run"]
 fn exported_smoke_logits_match_jax_reference() {
-    let artifact =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m");
+    let artifact = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m");
     let model_path = artifact.join("model.safetensors");
     if !model_path.is_file() {
         return;
