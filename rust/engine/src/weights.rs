@@ -160,7 +160,7 @@ impl ModelWeights {
             let values = decode_f32(name, view.shape(), view.data())?;
             parameter_count = parameter_count
                 .checked_add(element_count(view.shape())?)
-                .ok_or_else(|| EngineError::invalid_weights("total parameter count exceeds u64"))?;
+                .ok_or_else(|| EngineError::invalid_weights("tensor element count exceeds u64"))?;
 
             loaded.insert(
                 name.clone(),
@@ -393,35 +393,29 @@ mod tests {
     use crate::config::ModelConfig;
 
     #[test]
-    #[ignore = "requires the local 30.52 MiB exported artifact"]
-    fn exported_smoke_weights_load_and_validate() {
+    fn bundled_weights_load_and_validate() {
         let artifact =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/nilemini-8m-situ");
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m");
         let model_path = artifact.join("model.safetensors");
-
-        if !model_path.is_file() {
-            return;
-        }
-
         let config =
             ModelConfig::from_json_path(artifact.join("config.json")).expect("valid config");
         let weights = ModelWeights::load(model_path, &config).expect("valid exported weights");
 
-        assert_eq!(weights.metadata().tensor_names().len(), 164);
+        assert_eq!(weights.metadata().tensor_names().len(), 74);
         assert_eq!(weights.metadata().parameter_count(), 7_999_744);
         assert_eq!(
             weights
                 .required_tensor_values("final_norm.weight")
                 .expect("required final norm")
                 .len(),
-            640
+            256
         );
         assert_eq!(
             weights
                 .tensor("token_embedding.weight")
                 .expect("embedding tensor")
                 .shape(),
-            &[8_192, 640]
+            &[8_192, 256]
         );
     }
 }
