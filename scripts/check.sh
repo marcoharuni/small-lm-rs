@@ -8,7 +8,7 @@ run() {
   "$@" || exit $?
 }
 
-artifact="${1:-artifacts/nilemini-8m-situ}"
+artifact="${1:-artifacts/small-lm-8m}"
 
 [ -f "$artifact/model.safetensors" ] || { echo "missing model artifact" >&2; exit 1; }
 
