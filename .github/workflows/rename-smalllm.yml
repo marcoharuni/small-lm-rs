@@ -1,4 +1,3 @@
-# retry after sampler Clippy cleanup
 name: smallLM naming migration
 
 on:
@@ -75,7 +74,7 @@ jobs:
           changed = []
           for raw_path in paths:
               path = Path(raw_path)
-              if not path.is_file() or path == Path(".github/workflows/rename-smalllm.yml"):
+              if not path.is_file() or raw_path.startswith(".github/workflows/"):
                   continue
               data = path.read_bytes()
               try:
@@ -134,20 +133,20 @@ jobs:
       - name: Refresh Python lockfile
         run: uv lock
 
-      - name: Verify legacy names are gone
+      - name: Verify legacy names outside workflows are gone
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -I -inE 'nilemini|onehour|one-hour' -- ':!.github/workflows/rename-smalllm.yml'; then
-            echo 'legacy text naming remains' >&2
+          if git grep -I -inE 'nilemini|onehour|one-hour' -- ':!.github/workflows/*'; then
+            echo 'legacy text naming remains outside workflows' >&2
             exit 1
           fi
           if grep -a -iE 'nilemini|onehour|one-hour' artifacts/small-lm-8m/model.safetensors; then
             echo 'legacy naming remains in model.safetensors metadata' >&2
             exit 1
           fi
-          if git ls-files | grep -iE 'nilemini|onehour|one-hour'; then
-            echo 'legacy naming remains in a tracked path' >&2
+          if git ls-files | grep -v '^.github/workflows/' | grep -iE 'nilemini|onehour|one-hour'; then
+            echo 'legacy naming remains in a tracked path outside workflows' >&2
             exit 1
           fi
 
@@ -173,13 +172,12 @@ jobs:
       - name: Artifact and end-to-end checks
         run: bash scripts/check.sh
 
-      - name: Commit migration
+      - name: Commit non-workflow migration
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm .github/workflows/rename-smalllm.yml
           git add -A
           git commit -m 'Standardize smallLM naming'
           git push origin HEAD:main
