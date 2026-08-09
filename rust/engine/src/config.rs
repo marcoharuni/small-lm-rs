@@ -203,7 +203,7 @@ mod tests {
 
     fn valid_config() -> ModelConfig {
         ModelConfig {
-            model_name: "nilemini-8m-situ".to_owned(),
+            model_name: "small-lm-8m".to_owned(),
             architecture: "decoder-only-transformer".to_owned(),
             normalization: "RMSNorm".to_owned(),
             position_encoding: "RoPE".to_owned(),
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn exported_configuration_loads() {
-        let json = include_str!("../../../artifacts/nilemini-8m-situ/config.json");
+        let json = include_str!("../../../artifacts/small-lm-8m/config.json");
         let config: ModelConfig =
             serde_json::from_str(json).expect("exported configuration must decode");
 
