@@ -150,8 +150,10 @@ mod tests {
     fn projection_reuses_bfloat16_rounded_inputs_without_changing_results() {
         let input = [1.003_906_2_f32, -0.996_093_75_f32];
         let weight = [
-            0.333_984_38_f32, 0.667_968_75_f32, //
-            -0.25_f32, 0.125_f32,
+            0.333_984_38_f32,
+            0.667_968_75_f32, //
+            -0.25_f32,
+            0.125_f32,
         ];
         let output = linear(&input, 1, 2, &weight, 2).expect("valid projection");
 
@@ -160,8 +162,8 @@ mod tests {
             .map(|row| {
                 let mut sum = 0.0_f32;
                 for index in 0..2 {
-                    sum = round_to_bfloat16(input[index])
-                        .mul_add(round_to_bfloat16(row[index]), sum);
+                    sum =
+                        round_to_bfloat16(input[index]).mul_add(round_to_bfloat16(row[index]), sum);
                 }
                 sum
             })
