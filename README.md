@@ -72,7 +72,7 @@ The bundled base model was trained on **140,017,664 FineWeb-Edu tokens** with **
 
 The bundled instruction-tuning pass used the reproducible `onehour_sft` profile: **448 SmolTalk training examples** and **64 validation examples**, reaching validation loss **2.6459**. Its purpose is to exercise the complete instruction-tuning and chat-serving path; an 8M-parameter model with this limited SFT set should not be treated as a strong general-purpose assistant.
 
-Training uses JAX/Flax NNX with Muon for transformer projection matrices and AdamW for the remaining parameters. Parameters are stored in FP32; matrix products use BF16 operands with FP32 accumulation.
+Training uses JAX/Flax NNX with Muon for transformer projection matrices and AdamW for the remaining parameters. Parameters are stored in FP32. Transformer matrix products use BF16 operands with FP32 accumulation; the tied vocabulary projection uses FP32 operands and FP32 accumulation.
 
 See [`docs/TRAINING.md`](docs/TRAINING.md), [`docs/DATA_CARD.md`](docs/DATA_CARD.md), and [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md).
 
@@ -119,13 +119,13 @@ The exported JAX reference and Rust engine were compared over **81,920 logits**:
 
 | Metric | Result |
 | --- | ---: |
-| Max absolute error | 0.0528898239 |
-| Mean absolute error | 0.0052069233 |
-| RMSE | 0.0074163827 |
-| Cosine similarity | 0.9999967275 |
+| Max absolute error | 0.0465807915 |
+| Mean absolute error | 0.0049628036 |
+| RMSE | 0.0073501666 |
+| Cosine similarity | 0.9999967821 |
 | Top-1 agreement | 10 / 10 |
 
-Rust and JAX therefore select the same top-1 token at every checked reference position. Numerical differences remain because the Rust runtime reproduces BF16-equivalent matrix operands while executing on CPU.
+Rust and JAX therefore select the same top-1 token at every checked reference position. Transformer projections reproduce the JAX BF16-operand/FP32-accumulation path, while the tied LM head uses FP32 operands and FP32 accumulation to match the JAX reference exactly at that boundary.
 
 Details and the machine-readable report are in [`docs/parity.md`](docs/parity.md) and [`docs/parity_report.json`](docs/parity_report.json).
 
@@ -146,7 +146,7 @@ These are machine-specific measurements, not performance guarantees. Re-run them
 bash scripts/benchmark.sh
 ```
 
-Full results are in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
+The benchmark output records the exact Git revision and whether the working tree is clean so before/after measurements remain traceable. Full checked-in results are in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
 
 ## Reproducibility and checks
 
@@ -164,7 +164,7 @@ The complete local verification path additionally checks artifact hashes, JAX/Ru
 bash scripts/check.sh
 ```
 
-CI runs Python lint/type/tests and Rust formatting, Clippy, and workspace tests on pull requests and `main`.
+Pull-request CI verifies the Python pipeline, artifact SHA-256 checksums, Rust formatting and Clippy, the Rust test suite, the full 81,920-logit JAX/Rust parity fixture, and a live OpenAI-compatible server smoke test.
 
 ## Layout
 
