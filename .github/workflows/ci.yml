@@ -80,6 +80,6 @@ jobs:
       - name: Tests
         run: cargo test --workspace
       - name: JAX-Rust parity
-        run: cargo run --quiet --release -p nilemini-engine --example parity -- artifacts/small-lm-8m
+        run: cargo run --quiet --release -p smalllm-engine --example parity -- artifacts/small-lm-8m
       - name: OpenAI-compatible server smoke test
         run: bash scripts/smoke_server.sh artifacts/small-lm-8m
