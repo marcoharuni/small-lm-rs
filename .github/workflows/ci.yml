@@ -69,7 +69,5 @@ jobs:
         run: cargo test --workspace
       - name: JAX-Rust parity
         run: cargo run --quiet --release -p nilemini-engine --example parity -- artifacts/small-lm-8m
-      - name: Stage profile diagnostic
-        run: cargo run --quiet --release -p nilemini-engine --example stage_profile -- artifacts/small-lm-8m 32 3
       - name: OpenAI-compatible server smoke test
         run: bash scripts/smoke_server.sh artifacts/small-lm-8m
