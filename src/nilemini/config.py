@@ -86,7 +86,9 @@ class ModelConfig:
         if not 0.0 <= self.dropout < 1.0:
             raise ConfigurationError("dropout must be in [0, 1)")
         if not self.tie_word_embeddings or self.use_bias or self.dropout != 0.0:
-            raise ConfigurationError("small-lm-v1 requires tied embeddings, no bias, and no dropout")
+            raise ConfigurationError(
+                "small-lm-v1 requires tied embeddings, no bias, and no dropout"
+            )
         if self.calculated_parameter_count != self.expected_parameter_count:
             raise ConfigurationError(
                 "expected_parameter_count does not match the configured architecture: "
