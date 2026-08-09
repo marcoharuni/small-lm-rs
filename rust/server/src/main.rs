@@ -26,7 +26,7 @@ use worker::InferenceWorker;
 )]
 struct Args {
     /// Directory containing config, tokenizer, generation metadata, and weights.
-    #[arg(long, default_value = "artifacts/nilemini-8m-situ")]
+    #[arg(long, default_value = "artifacts/small-lm-8m")]
     model_dir: PathBuf,
 
     /// Interface on which the HTTP server listens.
@@ -83,7 +83,7 @@ mod tests {
     fn command_line_defaults_are_local_and_predictable() {
         let args = Args::try_parse_from(["small-lm-server"]).expect("default arguments parse");
 
-        assert_eq!(args.model_dir, PathBuf::from("artifacts/nilemini-8m-situ"));
+        assert_eq!(args.model_dir, PathBuf::from("artifacts/small-lm-8m"));
         assert_eq!(args.host, IpAddr::V4(Ipv4Addr::LOCALHOST));
         assert_eq!(args.port, 8080);
     }
