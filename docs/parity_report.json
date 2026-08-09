@@ -16,11 +16,11 @@
     "final_position_top1_match": true
   },
   "thresholds": {
-    "max_abs_error": 0.5,
-    "mean_abs_error": 0.05,
-    "root_mean_square_error": 0.1,
-    "min_cosine_similarity": 0.99,
-    "min_top1_agreement": 0.8,
+    "max_abs_error": 0.1,
+    "mean_abs_error": 0.01,
+    "root_mean_square_error": 0.02,
+    "min_cosine_similarity": 0.9999,
+    "min_top1_agreement": 1.0,
     "require_final_position_top1_match": true
   },
   "accepted": true,
