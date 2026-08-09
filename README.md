@@ -97,11 +97,23 @@ The model uses RMSNorm, grouped-query attention, RoPE, SiTU-GLU with bounded gat
 
 ## Training
 
-The bundled base model was trained on **140,017,664 FineWeb-Edu tokens** with **262,144 held-out validation tokens**. Final base validation loss was **3.8659** (perplexity **47.74**).
+The bundled model was trained with **JAX/Flax NNX on an NVIDIA L4 GPU hosted by Modal**. The reproducible profiles are `configs/training/onehour_final.json` for pretraining and `configs/training/onehour_sft.json` for instruction tuning.
 
-The bundled instruction-tuning pass used the reproducible `onehour_sft` profile: **448 SmolTalk training examples** and **64 validation examples**, reaching validation loss **2.6459**. Its purpose is to exercise the complete instruction-tuning and chat-serving path; an 8M-parameter model with this limited SFT set should not be treated as a strong general-purpose assistant.
+On a JAX-capable GPU machine, the complete flow is:
 
-Training uses JAX/Flax NNX with Muon for transformer projection matrices and AdamW for the remaining parameters. Parameters are stored in FP32. Transformer matrix products use BF16 operands with FP32 accumulation; the tied vocabulary projection uses FP32 operands and FP32 accumulation.
+```bash
+uv sync --locked --all-groups
+uv run nilemini prepare --profile configs/training/onehour_final.json
+uv run nilemini pretrain --profile configs/training/onehour_final.json
+uv run nilemini sft \
+  --profile configs/training/onehour_sft.json \
+  --base-profile configs/training/onehour_final.json
+uv run nilemini export --profile configs/training/onehour_sft.json
+```
+
+The pipeline is **FineWeb-Edu -> pretraining -> SmolTalk SFT -> SafeTensors export**. Pretraining processed **140,017,664 tokens** and finished at validation loss **3.8659** (perplexity **47.74**). SFT used **448 training / 64 validation examples** and reached validation loss **2.6459**.
+
+Training uses Muon for transformer projection matrices and AdamW for the remaining parameters. The exporter writes the Rust-consumable package to `exports/small-lm-8m/` by default.
 
 See [`docs/TRAINING.md`](docs/TRAINING.md), [`docs/DATA_CARD.md`](docs/DATA_CARD.md), and [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md).
 
