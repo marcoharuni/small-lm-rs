@@ -13,7 +13,7 @@ const RESERVED_MARKERS: [&str; 6] = [
     "<|assistant|>",
 ];
 
-/// Supported authors in a NileMini chat history.
+/// Supported authors in a SmallLM chat history.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ChatRole {
@@ -74,7 +74,7 @@ impl ChatMessage {
     }
 }
 
-/// Format messages with the frozen NileMini chat template.
+/// Format messages with the frozen SmallLM chat template.
 ///
 /// The format is:
 /// `<|bos|>(<|role|>\ncontent<|eos|>\n)+<|assistant|>\n`.

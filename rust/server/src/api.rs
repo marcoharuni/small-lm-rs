@@ -189,7 +189,7 @@ mod tests {
     #[tokio::test]
     async fn unknown_json_fields_return_structured_bad_request() {
         let body = serde_json::json!({
-            "model": "nilemini-8m-situ",
+            "model": "smalllm-8m-situ",
             "prompt": "Hello",
             "unsupported": true
         });

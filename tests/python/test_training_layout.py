@@ -2,10 +2,10 @@
 
 from pathlib import Path
 
-from nilemini.config import MODEL, load_profile, load_sft_profile
+from smalllm.config import MODEL, load_profile, load_sft_profile
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PACKAGE = PROJECT_ROOT / "src" / "nilemini"
+PACKAGE = PROJECT_ROOT / "src" / "smalllm"
 PROFILES = PROJECT_ROOT / "configs" / "training"
 
 

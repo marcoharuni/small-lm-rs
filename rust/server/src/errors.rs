@@ -7,7 +7,7 @@ use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use nilemini_engine::EngineError;
+use smalllm_engine::EngineError;
 use thiserror::Error;
 
 use crate::schema::ErrorResponse;

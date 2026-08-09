@@ -97,18 +97,18 @@ The model uses RMSNorm, grouped-query attention, RoPE, SiTU-GLU with bounded gat
 
 ## Training
 
-The bundled model was trained with **JAX/Flax NNX on an NVIDIA L4 GPU hosted by Modal**. The reproducible profiles are `configs/training/onehour_final.json` for pretraining and `configs/training/onehour_sft.json` for instruction tuning.
+The bundled model was trained with **JAX/Flax NNX on an NVIDIA L4 GPU hosted by Modal**. The reproducible profiles are `configs/training/final_l4.json` for pretraining and `configs/training/final_sft_l4.json` for instruction tuning.
 
 On a JAX-capable GPU machine, the complete flow is:
 
 ```bash
 uv sync --locked --all-groups
-uv run nilemini prepare --profile configs/training/onehour_final.json
-uv run nilemini pretrain --profile configs/training/onehour_final.json
-uv run nilemini sft \
-  --profile configs/training/onehour_sft.json \
-  --base-profile configs/training/onehour_final.json
-uv run nilemini export --profile configs/training/onehour_sft.json
+uv run smalllm prepare --profile configs/training/final_l4.json
+uv run smalllm pretrain --profile configs/training/final_l4.json
+uv run smalllm sft \
+  --profile configs/training/final_sft_l4.json \
+  --base-profile configs/training/final_l4.json
+uv run smalllm export --profile configs/training/final_sft_l4.json
 ```
 
 The pipeline is **FineWeb-Edu -> pretraining -> SmolTalk SFT -> SafeTensors export**. Pretraining processed **140,017,664 tokens** and finished at validation loss **3.8659** (perplexity **47.74**). SFT used **448 training / 64 validation examples** and reached validation loss **2.6459**.
@@ -210,7 +210,7 @@ Pull-request CI verifies the Python pipeline, artifact SHA-256 checksums, Rust f
 ## Layout
 
 ```text
-src/nilemini/               JAX training, evaluation, SFT, and export
+src/smalllm/               JAX training, evaluation, SFT, and export
 rust/engine/                independent Rust inference engine
 rust/server/                OpenAI-compatible HTTP server and browser chat
 artifacts/small-lm-8m/      bundled trained artifact and parity fixtures

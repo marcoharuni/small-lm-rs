@@ -1,4 +1,4 @@
-//! Decoder-only NileMini model interface.
+//! Decoder-only SmallLM model interface.
 
 use crate::config::ModelConfig;
 use crate::embedding::embedding_lookup;
@@ -10,20 +10,20 @@ use crate::tensor::validate_matrix;
 use crate::transformer::{TransformerBlock, TransformerBlockWeights};
 use crate::weights::ModelWeights;
 
-/// Executable decoder-only NileMini transformer.
+/// Executable decoder-only SmallLM transformer.
 ///
 /// The model owns validated FP32 weights and executes fresh-sequence CPU
 /// prefill through token embeddings, every transformer block, final RMSNorm,
 /// and the tied vocabulary projection.
 #[derive(Debug)]
-pub struct NileMiniModel {
+pub struct SmallLMModel {
     config: ModelConfig,
     blocks: Vec<TransformerBlock>,
     final_norm: RmsNorm,
     weights: Option<ModelWeights>,
 }
 
-impl NileMiniModel {
+impl SmallLMModel {
     /// Create an unweighted model definition from validated configuration.
     ///
     /// # Errors
@@ -423,7 +423,7 @@ impl NileMiniModel {
 
 #[cfg(test)]
 mod tests {
-    use super::NileMiniModel;
+    use super::SmallLMModel;
     use crate::config::ModelConfig;
     use crate::linear::linear_fp32;
     use crate::rmsnorm::RmsNorm;
@@ -459,21 +459,21 @@ mod tests {
 
     #[test]
     fn embedding_requires_attached_weights() {
-        let model = NileMiniModel::from_config(tiny_config()).expect("valid model");
+        let model = SmallLMModel::from_config(tiny_config()).expect("valid model");
         let error = model.embed_tokens(&[1]).expect_err("weights are required");
         assert!(error.to_string().contains("weights are not loaded"));
     }
 
     #[test]
     fn embedding_rejects_invalid_tokens_before_weight_access() {
-        let model = NileMiniModel::from_config(tiny_config()).expect("valid model");
+        let model = SmallLMModel::from_config(tiny_config()).expect("valid model");
         assert!(model.embed_tokens(&[]).is_err());
         assert!(model.embed_tokens(&[8]).is_err());
     }
 
     #[test]
     fn transformer_stack_requires_attached_weights() {
-        let model = NileMiniModel::from_config(tiny_config()).expect("valid model");
+        let model = SmallLMModel::from_config(tiny_config()).expect("valid model");
         let error = model
             .run_transformer_blocks(&[0.0; 4], 1)
             .expect_err("weights are required");
@@ -482,13 +482,13 @@ mod tests {
 
     #[test]
     fn transformer_stack_validates_hidden_state_shape() {
-        let model = NileMiniModel::from_config(tiny_config()).expect("valid model");
+        let model = SmallLMModel::from_config(tiny_config()).expect("valid model");
         assert!(model.run_transformer_blocks(&[0.0; 3], 1).is_err());
     }
 
     #[test]
     fn final_norm_requires_attached_weights() {
-        let model = NileMiniModel::from_config(tiny_config()).expect("valid model");
+        let model = SmallLMModel::from_config(tiny_config()).expect("valid model");
         let error = model
             .apply_final_norm(&[0.0; 4], 1)
             .expect_err("weights are required");
@@ -497,7 +497,7 @@ mod tests {
 
     #[test]
     fn tied_logits_require_attached_weights() {
-        let model = NileMiniModel::from_config(tiny_config()).expect("valid model");
+        let model = SmallLMModel::from_config(tiny_config()).expect("valid model");
         let error = model
             .project_tied_logits(&[0.0; 4], 1)
             .expect_err("weights are required");
@@ -506,7 +506,7 @@ mod tests {
 
     #[test]
     fn full_hidden_state_path_requires_attached_weights() {
-        let model = NileMiniModel::from_config(tiny_config()).expect("valid model");
+        let model = SmallLMModel::from_config(tiny_config()).expect("valid model");
         let error = model
             .forward_hidden_states(&[1])
             .expect_err("weights are required");
@@ -532,7 +532,7 @@ mod tests {
     #[test]
     fn complete_prefill_runs_every_layer_and_returns_all_logits() {
         let config = tiny_config();
-        let mut model = NileMiniModel::from_config(config.clone()).expect("valid model");
+        let mut model = SmallLMModel::from_config(config.clone()).expect("valid model");
         model.weights = Some(synthetic_weights(&config));
         let token_ids = [1, 2];
 
@@ -573,7 +573,7 @@ mod tests {
     #[test]
     fn cache_populating_prefill_matches_uncached_model_logits() {
         let config = tiny_config();
-        let mut model = NileMiniModel::from_config(config.clone()).expect("valid model");
+        let mut model = SmallLMModel::from_config(config.clone()).expect("valid model");
         model.weights = Some(synthetic_weights(&config));
         let token_ids = [1, 2, 3];
         let expected = model.forward_prefill(&token_ids).expect("uncached prefill");
@@ -600,7 +600,7 @@ mod tests {
     #[test]
     fn cached_token_logits_match_fresh_sequence_logits() {
         let config = tiny_config();
-        let mut model = NileMiniModel::from_config(config.clone()).expect("valid model");
+        let mut model = SmallLMModel::from_config(config.clone()).expect("valid model");
         model.weights = Some(synthetic_weights(&config));
         let mut cache = model.allocate_kv_cache(8).expect("allocated cache");
         model
@@ -623,7 +623,7 @@ mod tests {
         use crate::greedy::{greedy_generate_cached, greedy_generate_uncached};
 
         let config = tiny_config();
-        let mut model = NileMiniModel::from_config(config.clone()).expect("valid model");
+        let mut model = SmallLMModel::from_config(config.clone()).expect("valid model");
         model.weights = Some(synthetic_weights(&config));
         let uncached =
             greedy_generate_uncached(&model, &[1, 2], 3, None).expect("uncached generation");
@@ -638,7 +638,7 @@ mod tests {
         use crate::sampler::SamplingConfig;
 
         let config = tiny_config();
-        let mut model = NileMiniModel::from_config(config.clone()).expect("valid model");
+        let mut model = SmallLMModel::from_config(config.clone()).expect("valid model");
         model.weights = Some(synthetic_weights(&config));
         let expected = greedy_generate_cached(&model, &[1, 2], 3, None).expect("greedy generation");
         let actual = generate_token_ids(
@@ -663,7 +663,7 @@ mod tests {
         use crate::sampler::SamplingConfig;
 
         let config = tiny_config();
-        let mut model = NileMiniModel::from_config(config.clone()).expect("valid model");
+        let mut model = SmallLMModel::from_config(config.clone()).expect("valid model");
         model.weights = Some(synthetic_weights(&config));
         let first_token =
             greedy_generate_cached(&model, &[1, 2], 1, None).expect("one greedy token")[0];
@@ -685,7 +685,7 @@ mod tests {
     #[test]
     fn cached_decode_requires_prompt_state_and_capacity() {
         let config = tiny_config();
-        let mut model = NileMiniModel::from_config(config.clone()).expect("valid model");
+        let mut model = SmallLMModel::from_config(config.clone()).expect("valid model");
         model.weights = Some(synthetic_weights(&config));
         let mut empty_cache = model.allocate_kv_cache(2).expect("allocated cache");
         assert!(model.forward_cached_token(1, &mut empty_cache).is_err());
@@ -711,7 +711,7 @@ mod tests {
         let config =
             ModelConfig::from_json_path(artifact.join("config.json")).expect("valid config");
         let vocab_size = config.vocab_size;
-        let mut model = NileMiniModel::from_config(config).expect("valid model");
+        let mut model = SmallLMModel::from_config(config).expect("valid model");
         model.load_weights(model_path).expect("valid model weights");
 
         let logits = model
@@ -723,7 +723,7 @@ mod tests {
 
     #[test]
     fn constructs_every_configured_transformer_block() {
-        let model = NileMiniModel::from_config(tiny_config()).expect("valid model");
+        let model = SmallLMModel::from_config(tiny_config()).expect("valid model");
         assert_eq!(model.block_count(), 2);
         assert!(!model.has_weights());
     }

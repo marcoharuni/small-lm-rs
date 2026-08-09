@@ -2,14 +2,13 @@
 
 use std::path::PathBuf;
 
-use nilemini_engine::parity::ReferenceInputs;
-use nilemini_engine::{ModelConfig, NileMiniModel};
+use smalllm_engine::parity::ReferenceInputs;
+use smalllm_engine::{ModelConfig, SmallLMModel};
 
 #[test]
 #[ignore = "requires the local 30.52 MiB model and a release CPU run"]
 fn exported_cached_token_matches_uncached_final_logits() {
-    let artifact =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/nilemini-8m-situ");
+    let artifact = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m");
     let model_path = artifact.join("model.safetensors");
     if !model_path.is_file() {
         return;
@@ -23,7 +22,7 @@ fn exported_cached_token_matches_uncached_final_logits() {
     assert!(sequence.len() >= 2);
     let split = sequence.len() - 1;
 
-    let mut model = NileMiniModel::from_config(config).expect("valid model");
+    let mut model = SmallLMModel::from_config(config).expect("valid model");
     model.load_weights(model_path).expect("valid weights");
     let fresh = model.forward_prefill(sequence).expect("fresh logits");
     let mut cache = model

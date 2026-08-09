@@ -46,10 +46,10 @@ echo "artifact: $artifact"
 echo
 
 echo "--- workload: prompt=32, decode=32 ---"
-cargo run --quiet --release -p nilemini-engine --example cached_benchmark -- \
+cargo run --quiet --release -p smalllm-engine --example cached_benchmark -- \
   "$artifact" 32 32 || exit 1
 echo
 
 echo "--- workload: prompt=128, decode=32 ---"
-cargo run --quiet --release -p nilemini-engine --example cached_benchmark -- \
+cargo run --quiet --release -p smalllm-engine --example cached_benchmark -- \
   "$artifact" 128 32 || exit 1

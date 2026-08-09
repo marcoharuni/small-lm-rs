@@ -2,10 +2,10 @@
 
 use std::path::PathBuf;
 
-use nilemini_engine::chat::{format_chat_prompt, ChatMessage};
-use nilemini_engine::config::ModelConfig;
-use nilemini_engine::generation_config::GenerationConfig;
-use nilemini_engine::tokenizer::{NileTokenizer, SpecialTokenIds};
+use smalllm_engine::chat::{format_chat_prompt, ChatMessage};
+use smalllm_engine::config::ModelConfig;
+use smalllm_engine::generation_config::GenerationConfig;
+use smalllm_engine::tokenizer::{SmallLMTokenizer, SpecialTokenIds};
 
 fn artifact_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m")
@@ -20,7 +20,7 @@ fn exported_tokenizer_has_the_frozen_reserved_identifiers() {
         GenerationConfig::from_json_path(artifact.join("generation_config.json"), &model)
             .expect("valid generation config");
     let tokenizer =
-        NileTokenizer::from_file(artifact.join("tokenizer.json")).expect("valid tokenizer");
+        SmallLMTokenizer::from_file(artifact.join("tokenizer.json")).expect("valid tokenizer");
 
     let ids = tokenizer
         .validate_contract(&model, &generation)
@@ -41,8 +41,8 @@ fn exported_tokenizer_has_the_frozen_reserved_identifiers() {
 
 #[test]
 fn exported_reference_prompt_encodes_exactly() {
-    let tokenizer =
-        NileTokenizer::from_file(artifact_dir().join("tokenizer.json")).expect("valid tokenizer");
+    let tokenizer = SmallLMTokenizer::from_file(artifact_dir().join("tokenizer.json"))
+        .expect("valid tokenizer");
     let prompt = format_chat_prompt(&[ChatMessage::user("Hello")]).expect("valid chat prompt");
     let token_ids = tokenizer
         .encode(&prompt, false)

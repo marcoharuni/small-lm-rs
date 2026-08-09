@@ -1,6 +1,6 @@
 # Training
 
-The JAX implementation lives in `src/nilemini/`. The package name is retained as an internal implementation detail; the repository itself is `small-lm-rs`.
+The JAX implementation lives in `src/smalllm/`. The package name is retained as an internal implementation detail; the repository itself is `small-lm-rs`.
 
 ## Base model
 
@@ -16,7 +16,7 @@ context             512
 vocabulary          8192
 ```
 
-The final pretraining profile is `configs/training/onehour_final.json`:
+The final pretraining profile is `configs/training/final_l4.json`:
 
 ```text
 training tokens     140,017,664

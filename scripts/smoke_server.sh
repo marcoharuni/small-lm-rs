@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 
 MODEL_DIR="${1:-artifacts/small-lm-8m}"
-HOST="${NILEMINI_SMOKE_HOST:-127.0.0.1}"
-PORT="${NILEMINI_SMOKE_PORT:-18080}"
+HOST="${SMALLLM_SMOKE_HOST:-127.0.0.1}"
+PORT="${SMALLLM_SMOKE_PORT:-18080}"
 BASE_URL="http://${HOST}:${PORT}"
 LOG_FILE="${TMPDIR:-/tmp}/small-lm-server-smoke.log"
 
 echo "Building the release server before the readiness timer starts..."
-cargo build --release -q -p nilemini-server || exit $?
+cargo build --release -q -p smalllm-server || exit $?
 
-SERVER_BINARY="target/release/nilemini-server"
+SERVER_BINARY="target/release/smalllm-server"
 if [[ ! -x "$SERVER_BINARY" ]]; then
   echo "Release server binary was not created: $SERVER_BINARY"
   exit 1

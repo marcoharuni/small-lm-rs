@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use errors::ServerError;
-use nilemini_engine::GenerationService;
+use smalllm_engine::GenerationService;
 use tokio::net::TcpListener;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;

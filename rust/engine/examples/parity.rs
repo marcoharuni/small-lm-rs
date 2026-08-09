@@ -4,8 +4,8 @@ use std::error::Error;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use nilemini_engine::parity::{run_reference_parity, ParityThresholds};
-use nilemini_engine::{ModelConfig, NileMiniModel};
+use smalllm_engine::parity::{run_reference_parity, ParityThresholds};
+use smalllm_engine::{ModelConfig, SmallLMModel};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let artifact = std::env::args_os()
@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or_else(|| PathBuf::from("artifacts/small-lm-8m"));
 
     let config = ModelConfig::from_json_path(artifact.join("config.json"))?;
-    let mut model = NileMiniModel::from_config(config)?;
+    let mut model = SmallLMModel::from_config(config)?;
     model.load_weights(artifact.join("model.safetensors"))?;
 
     let report = run_reference_parity(

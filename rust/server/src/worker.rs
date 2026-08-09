@@ -4,10 +4,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use nilemini_engine::chat::{ChatMessage as EngineChatMessage, ChatRole};
-use nilemini_engine::generation::GenerationRequest;
-use nilemini_engine::sampler::SamplingConfig;
-use nilemini_engine::service::{GenerationService, ServiceGenerationOutput};
+use smalllm_engine::chat::{ChatMessage as EngineChatMessage, ChatRole};
+use smalllm_engine::generation::GenerationRequest;
+use smalllm_engine::sampler::SamplingConfig;
+use smalllm_engine::service::{GenerationService, ServiceGenerationOutput};
 
 use crate::errors::ApiError;
 use crate::schema::{

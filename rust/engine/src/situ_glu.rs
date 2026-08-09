@@ -1,4 +1,4 @@
-//! SiTU-GLU feed-forward operation used by NileMini.
+//! SiTU-GLU feed-forward operation used by SmallLM.
 
 use crate::config::ModelConfig;
 use crate::error::{EngineError, Result};

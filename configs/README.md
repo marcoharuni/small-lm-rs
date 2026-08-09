@@ -5,9 +5,9 @@
 Training profiles are in `configs/training/`:
 
 - `smoke.json` — quick pipeline test
-- `onehour_probe.json` — throughput probe
-- `onehour_final.json` — released base training run
-- `onehour_sft.json` — released instruction-tuning run
+- `probe_l4.json` — throughput probe
+- `final_l4.json` — released base training run
+- `final_sft_l4.json` — released instruction-tuning run
 - `pilot_l4.json`, `full_l4.json`, `sft_l4.json` — earlier development/planning profiles
 
-The released weights were produced from `onehour_final.json` followed by `onehour_sft.json`.
+The released weights were produced from `final_l4.json` followed by `final_sft_l4.json`.

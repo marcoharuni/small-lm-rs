@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from nilemini.cli import main
+from smalllm.cli import main
 
 
 def test_doctor_reports_ready(capsys: pytest.CaptureFixture[str]) -> None:

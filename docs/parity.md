@@ -26,7 +26,7 @@ The transformer projection matrices use BF16-equivalent operands with FP32 accum
 Run the check with:
 
 ```bash
-cargo run --release -p nilemini-engine --example parity -- \
+cargo run --release -p smalllm-engine --example parity -- \
   artifacts/small-lm-8m
 ```
 

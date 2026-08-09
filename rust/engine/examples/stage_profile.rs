@@ -8,9 +8,9 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use nilemini_engine::parity::ReferenceInputs;
-use nilemini_engine::{ModelConfig, NileMiniModel};
 use serde::Serialize;
+use smalllm_engine::parity::ReferenceInputs;
+use smalllm_engine::{ModelConfig, SmallLMModel};
 
 #[derive(Serialize)]
 struct StageProfile {
@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .take(prompt_length)
         .collect();
 
-    let mut model = NileMiniModel::from_config(config)?;
+    let mut model = SmallLMModel::from_config(config)?;
     model.load_weights(artifact.join("model.safetensors"))?;
 
     // Warm every stage once so one-time Rayon and code-path initialization is

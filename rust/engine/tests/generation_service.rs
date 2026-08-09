@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use nilemini_engine::chat::ChatMessage;
-use nilemini_engine::sampler::SamplingConfig;
-use nilemini_engine::service::GenerationService;
+use smalllm_engine::chat::ChatMessage;
+use smalllm_engine::sampler::SamplingConfig;
+use smalllm_engine::service::GenerationService;
 
 fn artifact_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m")

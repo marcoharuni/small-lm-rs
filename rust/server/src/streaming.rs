@@ -134,7 +134,7 @@ mod tests {
             id: "chatcmpl-test".to_owned(),
             object: "chat.completion".to_owned(),
             created: 1,
-            model: "nilemini-8m-situ".to_owned(),
+            model: "smalllm-8m-situ".to_owned(),
             choices: vec![ChatCompletionChoice {
                 index: 0,
                 message: ChatMessage {

@@ -4,8 +4,8 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
-from nilemini.config import ModelConfig
-from nilemini.model import NileMini
+from smalllm.config import ModelConfig
+from smalllm.model import SmallLM
 
 
 def tiny_config() -> ModelConfig:
@@ -39,7 +39,7 @@ def tiny_config() -> ModelConfig:
 
 def test_tiny_model_forward_is_finite_and_has_expected_shape() -> None:
     config = tiny_config()
-    model = NileMini(config, rngs=nnx.Rngs(params=7))
+    model = SmallLM(config, rngs=nnx.Rngs(params=7))
     logits, situ = model(jnp.asarray([[1, 2, 3, 4]], dtype=jnp.int32), collect_stats=True)
     assert logits.shape == (1, 4, config.vocab_size)
     assert situ.shape == (config.num_layers,)

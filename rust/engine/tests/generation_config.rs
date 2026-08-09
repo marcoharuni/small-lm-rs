@@ -2,8 +2,8 @@
 
 use std::path::PathBuf;
 
-use nilemini_engine::config::ModelConfig;
-use nilemini_engine::generation_config::GenerationConfig;
+use smalllm_engine::config::ModelConfig;
+use smalllm_engine::generation_config::GenerationConfig;
 
 fn artifact_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m")

@@ -37,7 +37,7 @@ top-1           10/10
 Run the parity test with:
 
 ```bash
-cargo run --release -p nilemini-engine --example parity -- \
+cargo run --release -p smalllm-engine --example parity -- \
   artifacts/small-lm-8m
 ```
 
@@ -46,7 +46,7 @@ cargo run --release -p nilemini-engine --example parity -- \
 For a coarse CPU breakdown of fresh-sequence prefill, run the opt-in stage profiler:
 
 ```bash
-cargo run --release -p nilemini-engine --example stage_profile -- \
+cargo run --release -p smalllm-engine --example stage_profile -- \
   artifacts/small-lm-8m 32 3
 ```
 

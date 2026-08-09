@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [project]
-name = "nilemini"
+name = "smalllm"
 version = "0.1.0"
 description = "JAX training and reference tooling for the bundled small language model"
 readme = "README.md"
@@ -30,13 +30,13 @@ dependencies = [
 ]
 
 [project.scripts]
-nilemini = "nilemini.cli:main"
-nilemini-train-tokenizer = "nilemini.tokenizer:main"
-nilemini-prepare-data = "nilemini.data:main"
-nilemini-pretrain = "nilemini.pretrain:main"
-nilemini-sft = "nilemini.sft:main"
-nilemini-evaluate = "nilemini.evaluate:main"
-nilemini-export = "nilemini.export:main"
+smalllm = "smalllm.cli:main"
+smalllm-train-tokenizer = "smalllm.tokenizer:main"
+smalllm-prepare-data = "smalllm.data:main"
+smalllm-pretrain = "smalllm.pretrain:main"
+smalllm-sft = "smalllm.sft:main"
+smalllm-evaluate = "smalllm.evaluate:main"
+smalllm-export = "smalllm.export:main"
 
 [dependency-groups]
 dev = [
@@ -47,12 +47,12 @@ dev = [
 test = ["pytest>=9.0,<10"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/nilemini"]
+packages = ["src/smalllm"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src/nilemini", "tests"]
+files = ["src/smalllm", "tests"]
 pretty = true
 show_error_codes = true
 
@@ -78,4 +78,4 @@ src = ["src", "tests"]
 select = ["B", "E", "F", "I", "RUF", "UP"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["nilemini"]
+known-first-party = ["smalllm"]

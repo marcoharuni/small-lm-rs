@@ -22,8 +22,8 @@ restores every layer to its previous synchronized length.
 ## Benchmark
 
 ```bash
-cargo run --release -p nilemini-engine --example cached_benchmark -- \
-  artifacts/nilemini-8m-situ
+cargo run --release -p smalllm-engine --example cached_benchmark -- \
+  artifacts/small-lm-8m
 ```
 
 The command reports prompt-prefill latency, one-token decode latency, and the

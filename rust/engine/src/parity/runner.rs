@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{ParityMetrics, ReferenceInputs, ReferenceLogits};
 use crate::error::{EngineError, Result};
-use crate::model::NileMiniModel;
+use crate::model::SmallLMModel;
 
 /// Baseline acceptance thresholds for CPU-versus-JAX/GPU logit parity.
 ///
@@ -140,7 +140,7 @@ pub struct ParityReport {
 ///
 /// Returns artifact, shape, model-execution, or metric-validation errors.
 pub fn run_reference_parity(
-    model: &NileMiniModel,
+    model: &SmallLMModel,
     inputs_path: impl AsRef<Path>,
     outputs_path: impl AsRef<Path>,
     thresholds: ParityThresholds,

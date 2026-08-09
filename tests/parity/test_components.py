@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from nilemini.reference import apply_rope, rms_norm, situ_glu
+from smalllm.reference import apply_rope, rms_norm, situ_glu
 
 pytestmark = pytest.mark.parity
 

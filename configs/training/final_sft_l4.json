@@ -1,0 +1,19 @@
+{
+  "name": "smallLM-8m-sft",
+  "seed": 42,
+  "selected_examples": 512,
+  "train_examples": 448,
+  "validation_examples": 64,
+  "batch_size": 8,
+  "microbatch_sequences": 1,
+  "optimizer": {
+    "muon_learning_rate": 0.003,
+    "adam_learning_rate": 5e-05,
+    "weight_decay": 0.01,
+    "warmup_fraction": 0.02,
+    "gradient_clip_norm": 1.0
+  },
+  "validate_every_updates": 28,
+  "checkpoint_every_updates": 28,
+  "log_every_updates": 10
+}

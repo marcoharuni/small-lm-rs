@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from nilemini.config import MODEL, SPECIAL_TOKENS
-from nilemini.generation import chat_prompt
-from nilemini.tokenizer import load_tokenizer, tokenizer_sha256
+from smalllm.config import MODEL, SPECIAL_TOKENS
+from smalllm.generation import chat_prompt
+from smalllm.tokenizer import load_tokenizer, tokenizer_sha256
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TOKENIZER = PROJECT_ROOT / "artifacts" / MODEL.model_name / "tokenizer.json"

@@ -1,7 +1,7 @@
 //! Deterministic uncached greedy decoding for correctness validation.
 
 use crate::error::{EngineError, Result};
-use crate::model::NileMiniModel;
+use crate::model::SmallLMModel;
 
 /// Generate tokens by repeatedly recomputing a complete prefill and selecting
 /// the largest final-position logit.
@@ -15,7 +15,7 @@ use crate::model::NileMiniModel;
 /// invalid EOS token, context overflow, malformed logits, or non-finite logits;
 /// otherwise propagates model-execution errors.
 pub fn greedy_generate_uncached(
-    model: &NileMiniModel,
+    model: &SmallLMModel,
     prompt_token_ids: &[u32],
     max_new_tokens: usize,
     eos_token_id: Option<u32>,
@@ -101,7 +101,7 @@ pub fn greedy_generate_uncached(
 ///
 /// Returns invalid-input, cache, or model-execution errors.
 pub fn greedy_generate_cached(
-    model: &NileMiniModel,
+    model: &SmallLMModel,
     prompt_token_ids: &[u32],
     max_new_tokens: usize,
     eos_token_id: Option<u32>,
@@ -141,7 +141,7 @@ pub fn greedy_generate_cached(
 }
 
 fn validate_request(
-    model: &NileMiniModel,
+    model: &SmallLMModel,
     prompt_token_ids: &[u32],
     max_new_tokens: usize,
     eos_token_id: Option<u32>,

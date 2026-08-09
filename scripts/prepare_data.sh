@@ -2,4 +2,4 @@
 set -euo pipefail
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
-exec uv run nilemini prepare "$@"
+exec uv run smalllm prepare "$@"

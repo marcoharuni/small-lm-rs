@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn unknown_chat_fields_are_rejected() {
         let json = r#"{
-            "model":"nilemini-8m-situ",
+            "model":"smalllm-8m-situ",
             "messages":[{"role":"user","content":"Hello"}],
             "unsupported":true
         }"#;
@@ -243,7 +243,7 @@ mod tests {
     #[test]
     fn unknown_completion_fields_are_rejected() {
         let json = r#"{
-            "model":"nilemini-8m-situ",
+            "model":"smalllm-8m-situ",
             "prompt":"Hello",
             "n":2
         }"#;

@@ -1,7 +1,7 @@
 """Tests for the frozen Muon/AdamW partition contract."""
 
-from nilemini.config import MODEL
-from nilemini.optimizer import expected_optimizer_group_counts
+from smalllm.config import MODEL
+from smalllm.optimizer import expected_optimizer_group_counts
 
 
 def test_optimizer_group_counts_cover_the_exact_model() -> None:

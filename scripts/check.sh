@@ -21,7 +21,7 @@ run uv run --frozen pytest -q
 run cargo fmt --all -- --check
 run cargo clippy --workspace --all-targets -- -D warnings
 run cargo test --workspace
-run cargo run --quiet --release -p nilemini-engine --example parity -- "$artifact"
+run cargo run --quiet --release -p smalllm-engine --example parity -- "$artifact"
 run bash scripts/smoke_server.sh "$artifact"
 
 echo

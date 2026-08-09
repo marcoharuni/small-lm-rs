@@ -3,9 +3,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::{EngineError, Result};
-use crate::model::NileMiniModel;
+use crate::model::SmallLMModel;
 use crate::sampler::{Sampler, SamplingConfig};
-use crate::tokenizer::NileTokenizer;
+use crate::tokenizer::SmallLMTokenizer;
 
 /// A single text-generation request.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -70,7 +70,7 @@ pub struct GenerationOutput {
 ///
 /// Returns request, context, EOS, model, cache, or sampling errors.
 pub fn generate_token_ids(
-    model: &NileMiniModel,
+    model: &SmallLMModel,
     prompt_token_ids: &[u32],
     max_new_tokens: usize,
     eos_token_id: Option<u32>,
@@ -156,8 +156,8 @@ pub fn generate_token_ids(
 ///
 /// Returns request-validation, tokenizer, model, cache, or sampling errors.
 pub fn generate(
-    model: &NileMiniModel,
-    tokenizer: &NileTokenizer,
+    model: &SmallLMModel,
+    tokenizer: &SmallLMTokenizer,
     request: &GenerationRequest,
 ) -> Result<GenerationOutput> {
     generate_with_eos(model, tokenizer, request, None)
@@ -170,8 +170,8 @@ pub fn generate(
 /// Returns request-validation, tokenizer, model, cache, EOS, or sampling
 /// errors.
 pub fn generate_with_eos(
-    model: &NileMiniModel,
-    tokenizer: &NileTokenizer,
+    model: &SmallLMModel,
+    tokenizer: &SmallLMTokenizer,
     request: &GenerationRequest,
     eos_token_id: Option<u32>,
 ) -> Result<GenerationOutput> {

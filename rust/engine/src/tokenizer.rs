@@ -8,7 +8,7 @@ use crate::config::ModelConfig;
 use crate::error::{EngineError, Result};
 use crate::generation_config::GenerationConfig;
 
-/// Exact identifiers assigned to NileMini's reserved tokens.
+/// Exact identifiers assigned to SmallLM's reserved tokens.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SpecialTokenIds {
     /// Padding token `<|pad|>`.
@@ -25,21 +25,21 @@ pub struct SpecialTokenIds {
     pub assistant: u32,
 }
 
-/// A validated wrapper around the tokenizer used by NileMini artifacts.
-pub struct NileTokenizer {
+/// A validated wrapper around the tokenizer used by SmallLM artifacts.
+pub struct SmallLMTokenizer {
     inner: Tokenizer,
 }
 
-impl std::fmt::Debug for NileTokenizer {
+impl std::fmt::Debug for SmallLMTokenizer {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
-            .debug_struct("NileTokenizer")
+            .debug_struct("SmallLMTokenizer")
             .field("vocab_size", &self.vocab_size())
             .finish_non_exhaustive()
     }
 }
 
-impl NileTokenizer {
+impl SmallLMTokenizer {
     /// Load a Hugging Face `tokenizer.json` artifact.
     ///
     /// # Errors
@@ -96,7 +96,7 @@ impl NileTokenizer {
         })
     }
 
-    /// Return the exact identifiers of every reserved NileMini token.
+    /// Return the exact identifiers of every reserved SmallLM token.
     ///
     /// # Errors
     ///

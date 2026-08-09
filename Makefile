@@ -28,7 +28,7 @@ build-rust:
 	cargo build --workspace
 
 run-server:
-	cargo run --package nilemini-server
+	cargo run --package smalllm-server
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov

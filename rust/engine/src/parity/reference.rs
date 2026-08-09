@@ -255,7 +255,7 @@ mod tests {
     #[test]
     fn loads_exported_reference_artifacts_when_available() {
         let artifact =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/nilemini-8m-situ");
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m");
         let inputs_path = artifact.join("reference_inputs.json");
         let outputs_path = artifact.join("reference_outputs.safetensors");
         if !inputs_path.is_file() || !outputs_path.is_file() {

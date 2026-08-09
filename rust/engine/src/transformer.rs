@@ -1,4 +1,4 @@
-//! Pre-norm NileMini transformer-block execution.
+//! Pre-norm SmallLM transformer-block execution.
 
 use crate::attention::{AttentionWeights, GroupedQueryAttention};
 use crate::config::ModelConfig;
@@ -161,7 +161,7 @@ impl<'a> TransformerBlockWeights<'a> {
     }
 }
 
-/// Executable metadata for one NileMini pre-norm transformer block.
+/// Executable metadata for one SmallLM pre-norm transformer block.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransformerBlock {
     hidden_size: usize,

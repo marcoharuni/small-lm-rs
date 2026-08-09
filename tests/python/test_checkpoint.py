@@ -5,7 +5,7 @@ from pathlib import Path
 import jax.numpy as jnp
 import numpy as np
 
-from nilemini.checkpoint import latest_checkpoint, restore_parameters, save_parameters, step_path
+from smalllm.checkpoint import latest_checkpoint, restore_parameters, save_parameters, step_path
 
 
 def test_step_paths_sort_numerically(tmp_path: Path) -> None:

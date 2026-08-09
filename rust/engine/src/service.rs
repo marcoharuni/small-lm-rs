@@ -9,11 +9,11 @@ use crate::config::ModelConfig;
 use crate::error::Result;
 use crate::generation::{generate_token_ids, GenerationRequest};
 use crate::generation_config::GenerationConfig;
-use crate::model::NileMiniModel;
+use crate::model::SmallLMModel;
 use crate::sampler::SamplingConfig;
-use crate::tokenizer::{NileTokenizer, SpecialTokenIds};
+use crate::tokenizer::{SmallLMTokenizer, SpecialTokenIds};
 
-/// Paths expected inside one exported NileMini artifact directory.
+/// Paths expected inside one exported SmallLM artifact directory.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ArtifactPaths {
     root: PathBuf,
@@ -75,8 +75,8 @@ pub struct ServiceGenerationOutput {
 /// Model and tokenizer loaded once for repeated independent requests.
 #[derive(Debug)]
 pub struct GenerationService {
-    model: NileMiniModel,
-    tokenizer: NileTokenizer,
+    model: SmallLMModel,
+    tokenizer: SmallLMTokenizer,
     generation_config: GenerationConfig,
     special_tokens: SpecialTokenIds,
 }
@@ -93,10 +93,10 @@ impl GenerationService {
         let model_config = ModelConfig::from_json_path(paths.model_config())?;
         let generation_config =
             GenerationConfig::from_json_path(paths.generation_config(), &model_config)?;
-        let tokenizer = NileTokenizer::from_file(paths.tokenizer())?;
+        let tokenizer = SmallLMTokenizer::from_file(paths.tokenizer())?;
         let special_tokens = tokenizer.validate_contract(&model_config, &generation_config)?;
 
-        let mut model = NileMiniModel::from_config(model_config)?;
+        let mut model = SmallLMModel::from_config(model_config)?;
         model.load_weights(paths.model_weights())?;
 
         Ok(Self {
@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn artifact_paths_are_resolved_predictably() {
-        let paths = ArtifactPaths::new("/models/nilemini");
+        let paths = ArtifactPaths::new("/models/smalllm");
         assert_eq!(paths.model_config(), paths.root().join("config.json"));
         assert_eq!(
             paths.generation_config(),
@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn missing_artifact_directory_fails_explicitly() {
         let error = GenerationService::from_artifact_dir(
-            "/definitely-not-a-real-nilemini-artifact-directory",
+            "/definitely-not-a-real-smalllm-artifact-directory",
         )
         .expect_err("missing artifacts must fail");
         assert!(error.to_string().contains("model configuration"));

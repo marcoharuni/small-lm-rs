@@ -8,4 +8,4 @@ if ! command -v cargo >/dev/null 2>&1; then
   exit 127
 fi
 
-exec cargo run --package nilemini-server -- "$@"
+exec cargo run --package smalllm-server -- "$@"

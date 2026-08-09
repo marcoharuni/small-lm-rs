@@ -2,8 +2,8 @@
 
 use std::path::PathBuf;
 
-use nilemini_engine::parity::{run_reference_parity, ParityThresholds};
-use nilemini_engine::{ModelConfig, NileMiniModel};
+use smalllm_engine::parity::{run_reference_parity, ParityThresholds};
+use smalllm_engine::{ModelConfig, SmallLMModel};
 
 #[test]
 #[ignore = "requires the local 30.52 MiB model and a release CPU run"]
@@ -15,7 +15,7 @@ fn exported_smoke_logits_match_jax_reference() {
     }
 
     let config = ModelConfig::from_json_path(artifact.join("config.json")).expect("valid config");
-    let mut model = NileMiniModel::from_config(config).expect("valid model");
+    let mut model = SmallLMModel::from_config(config).expect("valid model");
     model.load_weights(model_path).expect("valid model weights");
     let report = run_reference_parity(
         &model,

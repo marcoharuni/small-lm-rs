@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from nilemini.generation import chat_prompt
-from nilemini.tokenizer import load_tokenizer
+from smalllm.generation import chat_prompt
+from smalllm.tokenizer import load_tokenizer
 
 pytestmark = pytest.mark.parity
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

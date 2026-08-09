@@ -11,9 +11,9 @@ import pytest
 
 @pytest.mark.api
 def test_chat_completions_returns_a_valid_response() -> None:
-    server_url = os.environ.get("NILEMINI_SERVER_URL")
+    server_url = os.environ.get("SMALLLM_SERVER_URL")
     if server_url is None:
-        pytest.skip("set NILEMINI_SERVER_URL to run API integration tests")
+        pytest.skip("set SMALLLM_SERVER_URL to run API integration tests")
 
     request = Request(
         f"{server_url.rstrip('/')}/v1/chat/completions",

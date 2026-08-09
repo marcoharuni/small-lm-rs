@@ -1,4 +1,4 @@
-"""Modal L4 orchestration for NileMini smoke, pilot, full pretraining, SFT, and export."""
+"""Modal L4 orchestration for SmallLM smoke, pilot, full pretraining, SFT, and export."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ from pathlib import Path
 
 import modal
 
-APP_NAME = "nilemini-training"
-VOLUME_NAME = "nilemini-training"
-VOLUME_ROOT = Path("/vol/nilemini")
-CODE_ROOT = Path("/root/nilemini-rs")
-FROZEN_TOKENIZER = CODE_ROOT / "artifacts" / "nilemini-8m-situ" / "tokenizer.json"
+APP_NAME = "smalllm-training"
+VOLUME_NAME = "smalllm-training"
+VOLUME_ROOT = Path("/vol/smalllm")
+CODE_ROOT = Path("/root/small-lm-rs")
+FROZEN_TOKENIZER = CODE_ROOT / "artifacts" / "smalllm-8m-situ" / "tokenizer.json"
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -29,14 +29,14 @@ image = (
     .add_local_dir("src", remote_path=str(CODE_ROOT / "src"), copy=True)
     .add_local_dir("configs/training", remote_path=str(CODE_ROOT / "configs/training"), copy=True)
     .add_local_file(
-        "artifacts/nilemini-8m-situ/tokenizer.json",
+        "artifacts/small-lm-8m/tokenizer.json",
         remote_path=str(FROZEN_TOKENIZER),
         copy=True,
     )
     .env(
         {
             "PYTHONPATH": str(CODE_ROOT / "src"),
-            "NILEMINI_WORKSPACE": str(VOLUME_ROOT),
+            "SMALLLM_WORKSPACE": str(VOLUME_ROOT),
             "XLA_PYTHON_CLIENT_PREALLOCATE": "false",
         }
     )
@@ -66,8 +66,8 @@ def profile_path(name: str) -> Path:
 def prepare(profile: str = "pilot_l4.json", force: bool = False) -> str:
     """Copy the frozen tokenizer and materialize the requested FineWeb-Edu token budget."""
 
-    from nilemini.config import load_profile
-    from nilemini.pretrain import prepare_profile_data
+    from smalllm.config import load_profile
+    from smalllm.pretrain import prepare_profile_data
 
     volume.reload()
     selected = load_profile(profile_path(profile))
@@ -91,8 +91,8 @@ def prepare(profile: str = "pilot_l4.json", force: bool = False) -> str:
 def pretrain(profile: str = "pilot_l4.json") -> str:
     """Run/resume one L4 pretraining profile from its newest durable Orbax checkpoint."""
 
-    from nilemini.config import load_profile
-    from nilemini.pretrain import run_pretraining
+    from smalllm.config import load_profile
+    from smalllm.pretrain import run_pretraining
 
     volume.reload()
     selected = load_profile(profile_path(profile))
@@ -118,9 +118,9 @@ def pretrain(profile: str = "pilot_l4.json") -> str:
 def prepare_sft(profile: str = "sft_l4.json", force: bool = False) -> str:
     """Materialize the pinned 70k SmolTalk subset without paying for a GPU."""
 
-    from nilemini.config import artifact_dir, load_sft_profile
-    from nilemini.sft import prepare_sft_data
-    from nilemini.tokenizer import ensure_tokenizer
+    from smalllm.config import artifact_dir, load_sft_profile
+    from smalllm.sft import prepare_sft_data
+    from smalllm.tokenizer import ensure_tokenizer
 
     volume.reload()
     ensure_tokenizer(30_000_000, root=VOLUME_ROOT, frozen_source=FROZEN_TOKENIZER)
@@ -140,8 +140,8 @@ def prepare_sft(profile: str = "sft_l4.json", force: bool = False) -> str:
 def sft(base_profile: str = "full_l4.json", profile: str = "sft_l4.json") -> str:
     """Run/resume SFT from the completed full-pretraining parameter checkpoint."""
 
-    from nilemini.config import checkpoint_dir, load_profile, load_sft_profile
-    from nilemini.sft import run_sft
+    from smalllm.config import checkpoint_dir, load_profile, load_sft_profile
+    from smalllm.sft import run_sft
 
     volume.reload()
     base = load_profile(profile_path(base_profile))
@@ -167,8 +167,8 @@ def sft(base_profile: str = "full_l4.json", profile: str = "sft_l4.json") -> str
 def export(profile: str = "sft_l4.json") -> str:
     """Export final SFT parameters to the SafeTensors/Rust artifact contract."""
 
-    from nilemini.config import checkpoint_dir, load_sft_profile
-    from nilemini.export import export_model
+    from smalllm.config import checkpoint_dir, load_sft_profile
+    from smalllm.export import export_model
 
     volume.reload()
     selected = load_sft_profile(profile_path(profile))
@@ -204,25 +204,25 @@ def main(stage: str = "smoke", force: bool = False) -> None:
         print(prepare.remote("full_l4.json", force))
         print(pretrain.remote("full_l4.json"))
         return
-    if stage == "prepare-onehour-probe":
-        print(prepare.remote("onehour_probe.json", force))
+    if stage == "prepare-probe":
+        print(prepare.remote("probe_l4.json", force))
         return
-    if stage == "onehour-probe":
-        call = pretrain.spawn("onehour_probe.json")
-        print(f"One-hour 8M probe spawned in background: {call.object_id}")
+    if stage == "probe":
+        call = pretrain.spawn("probe_l4.json")
+        print(f"8M probe spawned in background: {call.object_id}")
         return
-    if stage == "prepare-onehour-final":
-        print(prepare.remote("onehour_final.json", force))
+    if stage == "prepare-final":
+        print(prepare.remote("final_l4.json", force))
         return
-    if stage == "onehour-final":
-        call = pretrain.spawn("onehour_final.json")
+    if stage == "final":
+        call = pretrain.spawn("final_l4.json")
         print(f"Final 8M pretraining spawned in background: {call.object_id}")
         return
-    if stage == "prepare-onehour-sft":
-        print(prepare_sft.remote("onehour_sft.json", force))
+    if stage == "prepare-final-sft":
+        print(prepare_sft.remote("final_sft_l4.json", force))
         return
-    if stage == "onehour-sft":
-        call = sft.spawn("onehour_final.json", "onehour_sft.json")
+    if stage == "final-sft":
+        call = sft.spawn("final_l4.json", "final_sft_l4.json")
         print(f"Final 8M SFT spawned in background: {call.object_id}")
         return
     if stage == "prepare-sft":
@@ -232,15 +232,15 @@ def main(stage: str = "smoke", force: bool = False) -> None:
         print(prepare_sft.remote("sft_l4.json", force))
         print(sft.remote("full_l4.json", "sft_l4.json"))
         return
-    if stage == "onehour-export":
-        print(export.remote("onehour_sft.json"))
+    if stage == "final-export":
+        print(export.remote("final_sft_l4.json"))
         return
     if stage == "export":
         print(export.remote("sft_l4.json"))
         return
     raise ValueError(
         "stage must be one of: prepare-smoke, smoke, prepare-pilot, pilot, "
-        "prepare-full, full, prepare-onehour-probe, onehour-probe, "
-        "prepare-onehour-final, onehour-final, prepare-onehour-sft, onehour-sft, "
-        "prepare-sft, sft, onehour-export, export"
+        "prepare-full, full, prepare-probe, probe, "
+        "prepare-final, final, prepare-final-sft, final-sft, "
+        "prepare-sft, sft, final-export, export"
     )

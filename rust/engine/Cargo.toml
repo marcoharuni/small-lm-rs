@@ -1,5 +1,5 @@
 [package]
-name = "nilemini-engine"
+name = "smalllm-engine"
 description = "Rust CPU inference engine for the bundled language model"
 version.workspace = true
 edition.workspace = true

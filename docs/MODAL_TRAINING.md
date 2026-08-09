@@ -15,8 +15,8 @@ FineWeb-Edu and SmolTalk are public datasets. `HF_TOKEN` is optional.
 Prepare and train the released base profile:
 
 ```bash
-./scripts/modal_train.sh --stage prepare-onehour-final
-./scripts/modal_train.sh --stage onehour-final
+./scripts/modal_train.sh --stage prepare-final
+./scripts/modal_train.sh --stage final
 ```
 
 The profile contains:
@@ -31,8 +31,8 @@ tokens/update       32,768
 ## Instruction tuning
 
 ```bash
-./scripts/modal_train.sh --stage prepare-onehour-sft
-./scripts/modal_train.sh --stage onehour-sft
+./scripts/modal_train.sh --stage prepare-final-sft
+./scripts/modal_train.sh --stage final-sft
 ```
 
 The SFT profile uses 448 training examples and 64 validation examples for 56 updates.
@@ -40,13 +40,13 @@ The SFT profile uses 448 training examples and 64 validation examples for 56 upd
 ## Export
 
 ```bash
-./scripts/modal_train.sh --stage onehour-export
+./scripts/modal_train.sh --stage final-export
 ```
 
 The exported artifact is copied into:
 
 ```text
-artifacts/nilemini-8m-situ/
+artifacts/small-lm-8m/
 ```
 
 That directory retains the original model identifier for compatibility with its manifest and parity fixtures.

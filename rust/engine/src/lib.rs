@@ -1,4 +1,4 @@
-//! CPU inference building blocks for NileMini.
+//! CPU inference building blocks for SmallLM.
 //!
 //! The crate provides validated configuration, tokenization, SafeTensors
 //! loading, foundational tensor operations, embedding lookup, linear
@@ -37,5 +37,5 @@ pub mod weights;
 pub use config::ModelConfig;
 pub use error::{EngineError, Result};
 pub use generation_config::GenerationConfig;
-pub use model::NileMiniModel;
+pub use model::SmallLMModel;
 pub use service::{ArtifactPaths, GenerationService, ServiceGenerationOutput};

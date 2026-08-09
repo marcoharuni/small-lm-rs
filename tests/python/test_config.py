@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from nilemini.config import ConfigurationError, load_model_config, load_profile, load_sft_profile
+from smalllm.config import ConfigurationError, load_model_config, load_profile, load_sft_profile
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = PROJECT_ROOT / "configs"
