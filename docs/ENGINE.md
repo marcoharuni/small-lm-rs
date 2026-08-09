@@ -36,7 +36,7 @@ Run the parity test with:
 
 ```bash
 cargo run --release -p nilemini-engine --example parity -- \
-  artifacts/nilemini-8m-situ
+  artifacts/small-lm-8m
 ```
 
 ## Benchmark
