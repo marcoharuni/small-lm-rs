@@ -10,13 +10,34 @@
 | --- | ---: |
 | Parameters | 7,999,744 |
 | Pretraining tokens | 140,017,664 |
+| Base validation | Loss 3.8659 / perplexity 47.74 |
+| SFT profile | 448 train / 64 validation examples |
+| SFT validation loss | 2.6459 |
 | Layers | 8 |
 | Hidden / FFN size | 256 / 704 |
 | Query / KV heads | 4 / 2 |
 | Vocabulary | 8,192 |
 | Context | 512 |
+| Architecture | Pre-norm decoder-only Transformer |
+| Attention / position | GQA + RoPE |
+| Normalization | RMSNorm |
 | Activation | SiTU-GLU |
+| Embeddings | Tied input/output embeddings |
+| Training stack | JAX + Flax NNX |
+| Optimizers | Muon + AdamW |
+| Pretraining optimizer | Muon LR 0.02 / AdamW LR 3e-4 / WD 0.1 |
+| SFT optimizer | Muon LR 0.003 / AdamW LR 5e-5 / WD 0.01 |
+| Gradient clipping | Global norm 1.0 |
+| Parameter precision | FP32 |
+| Transformer matmul | BF16 operands + FP32 accumulation |
+| Tied LM head | FP32 operands + FP32 accumulation |
+| Export | SafeTensors + tokenizer/config JSON |
 | Runtime | Native Rust CPU |
+| Decoding | KV-cached autoregressive generation |
+| Sampling | Greedy / temperature / top-k / top-p |
+| Parallel CPU projections | Rayon |
+| API | OpenAI-compatible HTTP server |
+| JAX↔Rust parity | 10/10 top-1 over 81,920 logits |
 | Decode baseline | ~44-45 tok/s on an Intel i5-4310U |
 | Peak RSS baseline | ~66 MiB |
 
