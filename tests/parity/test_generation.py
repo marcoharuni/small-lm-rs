@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_frozen_hello_prompt_token_ids() -> None:
-    tokenizer = load_tokenizer(PROJECT_ROOT / "artifacts/nilemini-8m-situ/tokenizer.json")
+    tokenizer = load_tokenizer(PROJECT_ROOT / "artifacts/small-lm-8m/tokenizer.json")
     assert chat_prompt(tokenizer, [{"role": "user", "content": "Hello"}]) == [
         1,
         4,
