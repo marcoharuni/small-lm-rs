@@ -4,6 +4,12 @@
 
 `small-lm-rs` is an end-to-end small-language-model systems project: a decoder-only model is trained in JAX/Flax NNX, exported as framework-independent artifacts, and executed by an independent Rust CPU inference engine with KV-cached generation and an OpenAI-compatible server. Python and JAX are not required at inference time.
 
+## Why JAX and Rust?
+
+The choice of JAX and Rust was deliberate rather than a claim that they are universally better than PyTorch and C. I am already comfortable working with PyTorch, but at this stage I am learning JAX more deeply and wanted the training side of the project to give me more practical experience with its functional style and accelerator-oriented execution model.
+
+For inference and serving, I chose Rust because I wanted a native runtime and HTTP server in one systems language, with strong type and memory safety and no Python dependency at inference time. I do not yet have practical experience with C, so choosing C would have introduced a second language-learning problem on top of implementing and validating the inference engine itself. Rust let me work close to the systems layer while remaining productive enough to build, test, benchmark, and debug the complete runtime end to end.
+
 ## At a glance
 
 | | |
@@ -94,12 +100,6 @@ embeddings
 ```
 
 The model uses RMSNorm, grouped-query attention, RoPE, SiTU-GLU with bounded gate/up branches, tied embeddings, and no bias or dropout. The exact numeric contract is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`configs/model.json`](configs/model.json).
-
-## Why JAX and Rust?
-
-The choice of JAX and Rust was deliberate rather than a claim that they are universally better than PyTorch and C. I am already comfortable working with PyTorch, but at this stage I am learning JAX more deeply and wanted the training side of the project to give me more practical experience with its functional style and accelerator-oriented execution model.
-
-For inference and serving, I chose Rust because I wanted a native runtime and HTTP server in one systems language, with strong type and memory safety and no Python dependency at inference time. I do not yet have practical experience with C, so choosing C would have introduced a second language-learning problem on top of implementing and validating the inference engine itself. Rust let me work close to the systems layer while remaining productive enough to build, test, benchmark, and debug the complete runtime end to end.
 
 ## Training
 
