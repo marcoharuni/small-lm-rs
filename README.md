@@ -232,8 +232,8 @@ Apache-2.0 for the repository code and documentation. Dataset use remains subjec
 
 ## AI use disclosure
 
-To the reviewers: I want to be transparent about the tools I used while developing this project. I used ChatGPT and Codex as engineering assistants during parts of the development process, particularly for debugging, reviewing implementation details, refactoring, improving tests and CI, repository cleanup, and refining documentation.
+I used ChatGPT and Codex as engineering assistants during parts of the development process, mainly for debugging, reviewing implementation details, refactoring, strengthening tests and CI, repository cleanup, and improving documentation.
 
-I remained responsible for the technical direction of the project, running the training and benchmark workflows, reviewing and integrating changes, and validating the final implementation through the test suite and JAX/Rust numerical parity checks. I have reviewed the submitted code and take responsibility for the final repository.
+I personally defined the project scope and end-to-end direction, made the model and systems design decisions, configured and ran the data preparation, pretraining, instruction-tuning and export workflows, ran the CPU benchmarks, tested the Rust runtime and API, reviewed and integrated changes, investigated failures, and validated the final implementation with the test suite and JAX/Rust numerical parity checks.
 
-I am including this note so that the role of AI assistance is clear to the reviewers rather than left implicit.
+AI assistance did not replace my responsibility for understanding, testing, validating, and making the final engineering decisions for the submitted project.
