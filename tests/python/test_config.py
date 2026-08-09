@@ -16,7 +16,7 @@ PROFILES = CONFIG_DIR / "training"
 
 def test_model_config_matches_frozen_architecture() -> None:
     config = load_model_config(CONFIG_DIR / "model.json")
-    assert config.model_name == "nilemini-8m-situ"
+    assert config.model_name == "small-lm-8m"
     assert config.vocab_size == 8192
     assert config.context_length == 512
     assert config.num_layers == 8
