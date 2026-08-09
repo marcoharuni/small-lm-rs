@@ -1,4 +1,4 @@
-//! Release benchmark for NileMini prompt prefill and KV-cached decoding.
+//! Release benchmark for SmallLM prompt prefill and KV-cached decoding.
 
 use std::error::Error;
 use std::fs;
@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let artifact = std::env::args_os()
         .nth(1)
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("artifacts/nilemini-8m-situ"));
+        .unwrap_or_else(|| PathBuf::from("artifacts/small-lm-8m"));
     let prompt_length = parse_usize(2, 32)?;
     let decode_tokens = parse_usize(3, 32)?;
 
