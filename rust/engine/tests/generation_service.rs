@@ -7,7 +7,7 @@ use nilemini_engine::sampler::SamplingConfig;
 use nilemini_engine::service::GenerationService;
 
 fn artifact_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/nilemini-8m-situ")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m")
 }
 
 #[test]
