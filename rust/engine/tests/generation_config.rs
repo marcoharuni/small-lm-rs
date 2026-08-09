@@ -6,7 +6,7 @@ use nilemini_engine::config::ModelConfig;
 use nilemini_engine::generation_config::GenerationConfig;
 
 fn artifact_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/nilemini-8m-situ")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m")
 }
 
 #[test]

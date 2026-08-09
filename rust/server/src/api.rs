@@ -155,14 +155,14 @@ mod tests {
             .await
             .expect("read response body");
         let body = serde_json::from_slice::<ModelListResponse>(&bytes).expect("valid model list");
-        assert_eq!(body.data[0].id, "nilemini-8m-situ");
+        assert_eq!(body.data[0].id, "small-lm-8m");
         assert_eq!(body.data[0].owned_by, "small-lm-rs");
     }
 
     #[tokio::test]
     async fn unloaded_worker_fails_with_structured_not_implemented_error() {
         let body = serde_json::json!({
-            "model": "nilemini-8m-situ",
+            "model": "small-lm-8m",
             "messages": [{"role": "user", "content": "Hello"}],
             "max_tokens": 1
         });
