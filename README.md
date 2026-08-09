@@ -229,3 +229,16 @@ It is not presented as a production-scale general-purpose assistant. Current lim
 ## License
 
 Apache-2.0 for the repository code and documentation. Dataset use remains subject to the upstream dataset terms.
+
+## AI use disclosure
+
+AI tools, including ChatGPT and Codex, were used during development of this repository. Their assistance included:
+
+- reviewing and debugging implementation details and suggesting code changes;
+- assisting with portions of implementation and refactoring across the inference/API path;
+- strengthening tests, CI, JAX/Rust parity checks, and repository-wide cleanup and naming work;
+- drafting and revising documentation and README text.
+
+Some code and documentation changes were generated or substantially shaped with AI assistance. The author remained responsible for the project direction, running the training and benchmark workflows, reviewing and integrating changes, validating the final implementation through tests and JAX/Rust parity, and taking responsibility for the submitted repository.
+
+This disclosure is included to make the role of AI assistance explicit rather than imply that the repository was produced entirely without it.
