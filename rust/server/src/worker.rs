@@ -32,7 +32,7 @@ impl InferenceWorker {
     pub fn new() -> Self {
         Self {
             service: None,
-            model_name: "nilemini-8m-situ".to_owned(),
+            model_name: "small-lm-8m".to_owned(),
         }
     }
 
