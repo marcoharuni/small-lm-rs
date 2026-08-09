@@ -27,14 +27,12 @@ Example:
 curl http://127.0.0.1:8080/v1/chat/completions \
   -H 'content-type: application/json' \
   -d '{
-    "model": "nilemini-8m-situ",
+    "model": "small-lm-8m",
     "messages": [{"role": "user", "content": "Hello"}],
     "max_tokens": 16,
     "temperature": 0.0
   }'
 ```
-
-The bundled artifact keeps its original model identifier, `nilemini-8m-situ`, so exported weights, manifests, tests, and parity fixtures remain reproducible. That identifier is not the project name.
 
 ## Model
 
@@ -122,7 +120,7 @@ bash scripts/check.sh
 src/nilemini/               JAX training and export code
 rust/engine/                Rust inference engine
 rust/server/                HTTP server and browser chat
-artifacts/nilemini-8m-situ/ bundled trained artifact
+artifacts/small-lm-8m/      bundled trained artifact
 configs/                    model and training configuration
 docs/                       implementation notes
 benchmarks/                 CPU benchmark data
