@@ -234,4 +234,4 @@ Apache-2.0 for the repository code and documentation. Dataset use remains subjec
 
 I used ChatGPT and Codex as engineering assistants during parts of the development process, mainly for debugging, reviewing implementation details, refactoring, strengthening tests and CI, repository cleanup, and improving documentation.
 
-I personally defined the project scope and end-to-end direction, made the model and systems design decisions, configured and ran the data preparation, pretraining, instruction-tuning and export workflows, ran the CPU benchmarks, tested the Rust runtime and API, reviewed and integrated changes, investigated failures, and validated the final implementation with the test suite and JAX/Rust numerical parity checks.
+I made the model and systems design decisions, configured and ran the data preparation, pretraining, instruction-tuning and export workflows, ran the CPU benchmarks, tested the Rust runtime and API, reviewed and integrated changes, investigated failures, and validated the final implementation with the test suite and JAX/Rust numerical parity checks.
