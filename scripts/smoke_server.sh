@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
-MODEL_DIR="${1:-artifacts/nilemini-8m-situ}"
+MODEL_DIR="${1:-artifacts/small-lm-8m}"
 HOST="${NILEMINI_SMOKE_HOST:-127.0.0.1}"
 PORT="${NILEMINI_SMOKE_PORT:-18080}"
 BASE_URL="http://${HOST}:${PORT}"
-LOG_FILE="${TMPDIR:-/tmp}/nilemini-server-smoke.log"
+LOG_FILE="${TMPDIR:-/tmp}/small-lm-server-smoke.log"
 
 echo "Building the release server before the readiness timer starts..."
-cargo build --release -q -p nilemini-server
+cargo build --release -q -p nilemini-server || exit $?
 
 SERVER_BINARY="target/release/nilemini-server"
 if [[ ! -x "$SERVER_BINARY" ]]; then
@@ -30,12 +29,12 @@ trap cleanup EXIT
 
 ready=0
 for _ in $(seq 1 300); do
-  if curl -fsS "$BASE_URL/health" >/tmp/nilemini-health.json 2>/dev/null; then
+  if curl -fsS "$BASE_URL/health" >/tmp/small-lm-health.json 2>/dev/null; then
     if python3 - <<'PYREADY'
 import json
 from pathlib import Path
 
-data = json.loads(Path("/tmp/nilemini-health.json").read_text())
+data = json.loads(Path("/tmp/small-lm-health.json").read_text())
 raise SystemExit(0 if data.get("ready") is True else 1)
 PYREADY
     then
@@ -62,12 +61,12 @@ if [[ "$ready" != "1" ]]; then
   exit 1
 fi
 
-curl -fsS "$BASE_URL/v1/models" >/tmp/nilemini-models.json
+curl -fsS "$BASE_URL/v1/models" >/tmp/small-lm-models.json || exit $?
 
 curl -fsS \
   -H 'content-type: application/json' \
   -d '{
-    "model":"nilemini-8m-situ",
+    "model":"small-lm-8m",
     "messages":[{"role":"user","content":"Hello"}],
     "max_tokens":1,
     "temperature":0.0,
@@ -75,40 +74,40 @@ curl -fsS \
     "top_k":0,
     "seed":0
   }' \
-  "$BASE_URL/v1/chat/completions" >/tmp/nilemini-chat.json
+  "$BASE_URL/v1/chat/completions" >/tmp/small-lm-chat.json || exit $?
 
 curl -fsS \
   -H 'content-type: application/json' \
   -d '{
-    "model":"nilemini-8m-situ",
+    "model":"small-lm-8m",
     "messages":[{"role":"user","content":"Hello"}],
     "max_tokens":1,
     "temperature":0.0,
     "stream":true
   }' \
-  "$BASE_URL/v1/chat/completions" >/tmp/nilemini-chat.sse
+  "$BASE_URL/v1/chat/completions" >/tmp/small-lm-chat.sse || exit $?
 
 python3 - <<'PY'
 import json
 from pathlib import Path
 
-health = json.loads(Path("/tmp/nilemini-health.json").read_text())
+health = json.loads(Path("/tmp/small-lm-health.json").read_text())
 assert health["status"] == "ok"
 assert health["ready"] is True
-assert health["model"] == "nilemini-8m-situ"
+assert health["model"] == "small-lm-8m"
 
-models = json.loads(Path("/tmp/nilemini-models.json").read_text())
+models = json.loads(Path("/tmp/small-lm-models.json").read_text())
 assert models["object"] == "list"
-assert models["data"][0]["id"] == "nilemini-8m-situ"
+assert models["data"][0]["id"] == "small-lm-8m"
 
-chat = json.loads(Path("/tmp/nilemini-chat.json").read_text())
+chat = json.loads(Path("/tmp/small-lm-chat.json").read_text())
 assert chat["object"] == "chat.completion"
-assert chat["model"] == "nilemini-8m-situ"
+assert chat["model"] == "small-lm-8m"
 assert chat["choices"][0]["message"]["role"] == "assistant"
 assert chat["usage"]["completion_tokens"] == 1
 assert chat["usage"]["total_tokens"] == chat["usage"]["prompt_tokens"] + 1
 
-sse = Path("/tmp/nilemini-chat.sse").read_text()
+sse = Path("/tmp/small-lm-chat.sse").read_text()
 assert "chat.completion.chunk" in sse
 assert "data: [DONE]" in sse
 
