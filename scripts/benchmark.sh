@@ -3,7 +3,7 @@
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root" || exit 1
 
-artifact="${1:-artifacts/nilemini-8m-situ}"
+artifact="${1:-artifacts/small-lm-8m}"
 
 if ! command -v cargo >/dev/null 2>&1; then
   echo "error: cargo is required" >&2
@@ -15,8 +15,8 @@ if [ ! -f "$artifact/model.safetensors" ]; then
   exit 1
 fi
 
-echo "NileMini CPU benchmark"
-echo "======================"
+echo "SmallLM CPU benchmark"
+echo "====================="
 echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "os: $(uname -srmo)"
 echo "rustc: $(rustc --version)"
@@ -35,7 +35,6 @@ echo
 echo "--- workload: prompt=32, decode=32 ---"
 cargo run --quiet --release -p nilemini-engine --example cached_benchmark -- \
   "$artifact" 32 32 || exit 1
-
 echo
 
 echo "--- workload: prompt=128, decode=32 ---"
