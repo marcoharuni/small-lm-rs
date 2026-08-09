@@ -1,5 +1,5 @@
 {
-  "model_name": "small-lm-8m",
+  "model_name": "nilemini-8m-situ",
   "architecture": "decoder-only-transformer",
   "vocab_size": 8192,
   "context_length": 512,
