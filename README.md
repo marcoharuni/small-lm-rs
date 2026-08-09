@@ -26,11 +26,38 @@ The repository contains the training pipeline, byte-level BPE tokenizer, determi
 
 ## Run
 
+Requirements: **Git** and **Rust 1.85+** with Cargo. Python and JAX are not needed to run the exported model.
+
+On a new machine:
+
 ```bash
+git clone https://github.com/marcoharuni/small-lm-rs.git
+cd small-lm-rs
+cargo --version
 ./scripts/run_server.sh
 ```
 
-Then open `http://127.0.0.1:8080/`.
+If the repository is already cloned:
+
+```bash
+cd small-lm-rs
+git pull
+./scripts/run_server.sh
+```
+
+Keep the server terminal running, then open:
+
+```text
+http://127.0.0.1:8080/
+```
+
+On Linux you can open it directly with:
+
+```bash
+xdg-open http://127.0.0.1:8080/
+```
+
+Stop the server with `Ctrl+C`.
 
 API endpoints:
 
@@ -41,7 +68,7 @@ POST /v1/completions
 POST /v1/chat/completions
 ```
 
-Example:
+You can also chat from another terminal:
 
 ```bash
 curl http://127.0.0.1:8080/v1/chat/completions \
