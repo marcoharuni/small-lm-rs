@@ -20,7 +20,7 @@ Dense projection output elements are parallelized with Rayon. Each dot product k
 
 Weights, activations, and KV cache are currently stored in FP32. Transformer matrix projections use BF16-equivalent operands with FP32 accumulation to match the JAX training/reference path. The final tied vocabulary projection intentionally uses FP32 operands and FP32 accumulation because that is how the JAX reference computes the LM head.
 
-The generic transformer projection path rounds each activation to its BF16-equivalent value once per projection and reuses it across output neurons, avoiding repeated conversion of the same activation inside every output dot product.
+The transformer projection path rounds each activation to its BF16-equivalent value once per projection and reuses it across output neurons. For multi-token prefill, the projection weight matrix is also rounded once and reused across sequence rows instead of repeating the same conversion inside every row's dot products. Single-token cached decode keeps inline weight conversion to avoid allocating a temporary rounded matrix for every generated token.
 
 ## Correctness
 
@@ -40,6 +40,17 @@ Run the parity test with:
 cargo run --release -p nilemini-engine --example parity -- \
   artifacts/small-lm-8m
 ```
+
+## Performance diagnostics
+
+For a coarse CPU breakdown of fresh-sequence prefill, run the opt-in stage profiler:
+
+```bash
+cargo run --release -p nilemini-engine --example stage_profile -- \
+  artifacts/small-lm-8m 32 3
+```
+
+The final two arguments are prompt length and measurement iterations. The profiler warms the model path first, then reports embedding, transformer-stack, final-normalization, and tied-LM-head time separately. These timings are diagnostics for the current machine, not portable performance guarantees.
 
 ## Benchmark
 
