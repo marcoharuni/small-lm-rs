@@ -49,7 +49,7 @@ The exported artifact is copied into:
 artifacts/small-lm-8m/
 ```
 
-That directory retains the original model identifier for compatibility with its manifest and parity fixtures.
+The checked-in artifact and API use the model identifier `small-lm-8m`.
 
 ## Checkpointing
 
