@@ -2,11 +2,11 @@
 
 **Train in JAX. Export to SafeTensors. Run entirely in Rust.**
 
-`small-lm-rs` is an end-to-end small-language-model systems project: a decoder-only model is trained in JAX/Flax NNX, exported as framework-independent artifacts, and executed by an independent Rust CPU inference engine with KV-cached generation and an OpenAI-compatible server. Python and JAX are not required at inference time.
+`small-lm-rs` is an end-to-end small-language-model systems task: a decoder-only model is trained in JAX/Flax NNX, exported as framework-independent artifacts, and executed by an independent Rust CPU inference engine with KV-cached generation and an OpenAI-compatible server. Python and JAX are not required at inference time.
 
 ## Why JAX and Rust?
 
-The choice of JAX and Rust was deliberate rather than a claim that they are universally better than PyTorch and C. I am already comfortable working with PyTorch, but at this stage I am learning JAX more deeply and wanted the training side of the project to give me more practical experience with its functional style and accelerator-oriented execution model.
+The choice of JAX and Rust was deliberate rather than a claim that they are universally better than PyTorch and C. I am already comfortable working with PyTorch, but at this stage I am learning JAX more deeply and wanted the training side of the task to give me more practical experience with its functional style and accelerator-oriented execution model.
 
 For inference and serving, I chose Rust because I wanted a native runtime and HTTP server in one systems language, with strong type and memory safety and no Python dependency at inference time. I do not yet have practical experience with C, so choosing C would have introduced a second language-learning problem on top of implementing and validating the inference engine itself. Rust let me work close to the systems layer while remaining productive enough to build, test, benchmark, and debug the complete runtime end to end.
 
@@ -228,7 +228,7 @@ scripts/                    train/export/run/check helpers
 
 ## Scope and limitations
 
-This project is deliberately small enough to understand end to end. It demonstrates the complete path from raw data and tokenizer training through model training, artifact conversion, native inference, cached autoregressive generation, API serving, numerical validation, and CPU benchmarking.
+This task is deliberately small enough to understand end to end. It demonstrates the complete path from raw data and tokenizer training through model training, artifact conversion, native inference, cached autoregressive generation, API serving, numerical validation, and CPU benchmarking.
 
 It is not presented as a production-scale general-purpose assistant. Current limitations include the small parameter count, 512-token context, FP32 model storage/runtime, CPU-only execution, and limited instruction tuning. See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
@@ -241,3 +241,5 @@ Apache-2.0 for the repository code and documentation. Dataset use remains subjec
 I used ChatGPT and Codex as engineering assistants during parts of the development process, mainly for debugging, reviewing implementation details, refactoring, strengthening tests and CI, repository cleanup, and improving documentation.
 
 I made the model and systems design decisions, configured and ran the data preparation, pretraining, instruction-tuning and export workflows, ran the CPU benchmarks, tested the Rust runtime and API, reviewed and integrated changes, investigated failures, and validated the final implementation with the test suite and JAX/Rust numerical parity checks.
+
+Thank you.
