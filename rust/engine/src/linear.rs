@@ -114,11 +114,12 @@ mod tests {
         let expected = weight
             .chunks_exact(2)
             .map(|row| {
-                round_to_bfloat16(input[0])
-                    .mul_add(
-                        round_to_bfloat16(row[0]),
-                        round_to_bfloat16(input[1]) * round_to_bfloat16(row[1]),
-                    )
+                let mut sum = 0.0_f32;
+                for index in 0..2 {
+                    sum = round_to_bfloat16(input[index])
+                        .mul_add(round_to_bfloat16(row[index]), sum);
+                }
+                sum
             })
             .collect::<Vec<_>>();
 
