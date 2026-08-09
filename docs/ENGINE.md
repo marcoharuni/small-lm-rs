@@ -8,7 +8,7 @@ Implemented pieces include:
 - tokenizer and chat formatting
 - RMSNorm and RoPE
 - grouped-query causal attention
-- gated feed-forward blocks
+- SiTU-GLU feed-forward blocks
 - tied output projection
 - prompt prefill
 - KV-cached token decoding
@@ -18,17 +18,19 @@ Implemented pieces include:
 
 Dense projection output elements are parallelized with Rayon. Each dot product keeps the reference accumulation order used by the JAX/Rust parity tests.
 
-Weights, activations, and KV cache are currently FP32. Matrix operands are rounded to BF16-equivalent values before multiplication to match the training/reference numerics.
+Weights, activations, and KV cache are currently stored in FP32. Transformer matrix projections use BF16-equivalent operands with FP32 accumulation to match the JAX training/reference path. The final tied vocabulary projection intentionally uses FP32 operands and FP32 accumulation because that is how the JAX reference computes the LM head.
+
+The generic transformer projection path rounds each activation to its BF16-equivalent value once per projection and reuses it across output neurons, avoiding repeated conversion of the same activation inside every output dot product.
 
 ## Correctness
 
 The checked-in artifact was compared against the JAX reference over 81,920 logits:
 
 ```text
-max abs error   0.0528898239
-mean abs error  0.0052069233
-RMSE            0.0074163827
-cosine          0.9999967275
+max abs error   0.0465807915
+mean abs error  0.0049628036
+RMSE            0.0073501666
+cosine          0.9999967821
 top-1           10/10
 ```
 
@@ -45,7 +47,7 @@ cargo run --release -p nilemini-engine --example parity -- \
 bash scripts/benchmark.sh
 ```
 
-Measured results are kept in `benchmarks/RESULTS.md`.
+The benchmark harness records the source revision and working-tree state together with hardware/runtime details. Measured results are kept in `benchmarks/RESULTS.md`.
 
 ## Tests
 
@@ -54,3 +56,5 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
+
+Pull-request CI additionally verifies the bundled artifact checksums, runs the full JAX/Rust parity fixture, and starts the real server for an OpenAI-compatible API smoke test.
