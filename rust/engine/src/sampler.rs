@@ -42,7 +42,7 @@ impl SamplingConfig {
                 "sampling temperature must be finite and non-negative",
             ));
         }
-        if !self.top_p.is_finite() || !(0.0 < self.top_p && self.top_p <= 1.0) {
+        if !(self.top_p.is_finite() && 0.0 < self.top_p && self.top_p <= 1.0) {
             return Err(EngineError::invalid_configuration(
                 "sampling top_p must be finite and in the range (0, 1]",
             ));
