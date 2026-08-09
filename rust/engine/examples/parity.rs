@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let artifact = std::env::args_os()
         .nth(1)
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("artifacts/nilemini-8m-situ"));
+        .unwrap_or_else(|| PathBuf::from("artifacts/small-lm-8m"));
 
     let config = ModelConfig::from_json_path(artifact.join("config.json"))?;
     let mut model = NileMiniModel::from_config(config)?;
