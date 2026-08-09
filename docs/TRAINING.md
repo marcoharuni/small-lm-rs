@@ -1,6 +1,6 @@
 # Training
 
-The JAX implementation lives in `src/nilemini/`. The package name is kept for compatibility with the existing training/export scripts; the repository itself is branded `small-lm-rs`.
+The JAX implementation lives in `src/nilemini/`. The package name is retained as an internal implementation detail; the repository itself is `small-lm-rs`.
 
 ## Base model
 
@@ -67,7 +67,5 @@ Orbax checkpoints store parameters, optimizer state, completed update, and proce
 The checked-in artifact is at:
 
 ```text
-artifacts/nilemini-8m-situ/
+artifacts/small-lm-8m/
 ```
-
-That directory keeps its original identifier because it is part of the frozen artifact contract.
