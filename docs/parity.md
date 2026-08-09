@@ -25,7 +25,7 @@ Run the check with:
 
 ```bash
 cargo run --release -p nilemini-engine --example parity -- \
-  artifacts/nilemini-8m-situ
+  artifacts/small-lm-8m
 ```
 
 The machine-readable result is in `parity_report.json`.
