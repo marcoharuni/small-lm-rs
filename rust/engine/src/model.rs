@@ -4,7 +4,7 @@ use crate::config::ModelConfig;
 use crate::embedding::embedding_lookup;
 use crate::error::{EngineError, Result};
 use crate::kv_cache::{KvCache, KvCacheConfig};
-use crate::linear::linear;
+use crate::linear::linear_fp32;
 use crate::rmsnorm::RmsNorm;
 use crate::tensor::validate_matrix;
 use crate::transformer::{TransformerBlock, TransformerBlockWeights};
@@ -192,6 +192,10 @@ impl NileMiniModel {
     /// Project normalized hidden states to vocabulary logits using the tied
     /// token-embedding matrix.
     ///
+    /// The JAX reference performs this final vocabulary projection with FP32
+    /// operands and FP32 accumulation, so it intentionally does not use the
+    /// BF16-equivalent transformer projection path.
+    ///
     /// The returned row-major tensor has shape
     /// `[sequence_length, vocab_size]`.
     ///
@@ -213,7 +217,7 @@ impl NileMiniModel {
         let embedding = self
             .loaded_weights()?
             .required_tensor_values("token_embedding.weight")?;
-        linear(
+        linear_fp32(
             hidden_states,
             sequence_length,
             self.config.hidden_size,
@@ -421,7 +425,7 @@ impl NileMiniModel {
 mod tests {
     use super::NileMiniModel;
     use crate::config::ModelConfig;
-    use crate::linear::linear;
+    use crate::linear::linear_fp32;
     use crate::rmsnorm::RmsNorm;
     use crate::weights::ModelWeights;
     use std::path::PathBuf;
@@ -543,7 +547,7 @@ mod tests {
             .expect("attached weights")
             .required_tensor_values("token_embedding.weight")
             .expect("embedding table");
-        let expected_logits = linear(
+        let expected_logits = linear_fp32(
             &expected_hidden,
             token_ids.len(),
             config.hidden_size,
@@ -695,10 +699,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires the local 30.52 MiB artifact and a release CPU run"]
-    fn exported_smoke_model_runs_one_token_prefill() {
+    #[ignore = "requires the bundled 30.52 MiB artifact and a release CPU run"]
+    fn bundled_model_runs_one_token_prefill() {
         let artifact =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/nilemini-8m-situ");
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/small-lm-8m");
         let model_path = artifact.join("model.safetensors");
         if !model_path.is_file() {
             return;

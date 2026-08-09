@@ -15,9 +15,22 @@ if [ ! -f "$artifact/model.safetensors" ]; then
   exit 1
 fi
 
+git_head="unknown"
+git_state="unknown"
+if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git_head="$(git rev-parse HEAD)"
+  if git diff --quiet --ignore-submodules HEAD -- && git diff --cached --quiet --ignore-submodules HEAD --; then
+    git_state="clean"
+  else
+    git_state="dirty"
+  fi
+fi
+
 echo "SmallLM CPU benchmark"
 echo "====================="
 echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "git_head: $git_head"
+echo "git_state: $git_state"
 echo "os: $(uname -srmo)"
 echo "rustc: $(rustc --version)"
 echo "cargo: $(cargo --version)"

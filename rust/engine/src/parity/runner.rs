@@ -12,6 +12,8 @@ use crate::model::NileMiniModel;
 ///
 /// Scalar-error, cosine-similarity, overall top-1, and final next-token checks
 /// are combined so a tensor-layout error cannot be hidden by one aggregate.
+/// The defaults deliberately retain margin above the bundled model's measured
+/// error while being strict enough to catch meaningful numerical regressions.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ParityThresholds {
     /// Largest permitted absolute scalar error.
@@ -31,11 +33,11 @@ pub struct ParityThresholds {
 impl Default for ParityThresholds {
     fn default() -> Self {
         Self {
-            max_abs_error: 0.5,
-            mean_abs_error: 0.05,
-            root_mean_square_error: 0.1,
-            min_cosine_similarity: 0.99,
-            min_top1_agreement: 0.8,
+            max_abs_error: 0.1,
+            mean_abs_error: 0.01,
+            root_mean_square_error: 0.02,
+            min_cosine_similarity: 0.9999,
+            min_top1_agreement: 1.0,
             require_final_position_top1_match: true,
         }
     }
@@ -207,5 +209,25 @@ mod tests {
             ParityMetrics::compare(&[1.0, 2.0], &[1.0, 2.0], 1, 1, 2).expect("valid metrics");
         let thresholds = ParityThresholds::default();
         assert!(thresholds.violations(&metrics).is_empty());
+    }
+
+    #[test]
+    fn default_thresholds_reject_meaningful_regressions() {
+        let thresholds = ParityThresholds::default();
+        let metrics = ParityMetrics {
+            element_count: 2,
+            max_abs_error: 0.11,
+            mean_abs_error: 0.011,
+            root_mean_square_error: 0.021,
+            cosine_similarity: 0.9998,
+            top1_matches: 1,
+            top1_total: 2,
+            top1_agreement: 0.5,
+            rust_top1_token_ids: vec![0, 1],
+            reference_top1_token_ids: vec![0, 0],
+            final_position_top1_match: false,
+        };
+        let violations = thresholds.violations(&metrics);
+        assert_eq!(violations.len(), 6);
     }
 }

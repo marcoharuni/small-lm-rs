@@ -4,10 +4,10 @@
   "vocab_size": 8192,
   "metrics": {
     "element_count": 81920,
-    "max_abs_error": 0.05288982391357422,
-    "mean_abs_error": 0.005206923344155711,
-    "root_mean_square_error": 0.007416382676593778,
-    "cosine_similarity": 0.9999967275464626,
+    "max_abs_error": 0.04658079147338867,
+    "mean_abs_error": 0.004962803585675224,
+    "root_mean_square_error": 0.007350166617063019,
+    "cosine_similarity": 0.99999678209871,
     "top1_matches": 10,
     "top1_total": 10,
     "top1_agreement": 1.0,
@@ -16,11 +16,11 @@
     "final_position_top1_match": true
   },
   "thresholds": {
-    "max_abs_error": 0.5,
-    "mean_abs_error": 0.05,
-    "root_mean_square_error": 0.1,
-    "min_cosine_similarity": 0.99,
-    "min_top1_agreement": 0.8,
+    "max_abs_error": 0.1,
+    "mean_abs_error": 0.01,
+    "root_mean_square_error": 0.02,
+    "min_cosine_similarity": 0.9999,
+    "min_top1_agreement": 1.0,
     "require_final_position_top1_match": true
   },
   "accepted": true,
