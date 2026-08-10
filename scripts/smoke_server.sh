@@ -17,6 +17,7 @@ fi
 
 "$SERVER_BINARY" \
   --model-dir "$MODEL_DIR" \
+  --max-active-sequences 8 \
   --host "$HOST" \
   --port "$PORT" >"$LOG_FILE" 2>&1 &
 SERVER_PID=$!
@@ -87,6 +88,31 @@ curl -fsS \
   }' \
   "$BASE_URL/v1/chat/completions" >/tmp/small-lm-chat.sse || exit $?
 
+concurrent_pids=()
+for index in 0 1 2 3; do
+  curl -fsS \
+    -H 'content-type: application/json' \
+    -d "{
+      \"model\":\"small-lm-8m\",
+      \"messages\":[{\"role\":\"user\",\"content\":\"Concurrent request ${index}\"}],
+      \"max_tokens\":4,
+      \"temperature\":0.0,
+      \"top_p\":1.0,
+      \"top_k\":0,
+      \"seed\":0
+    }" \
+    "$BASE_URL/v1/chat/completions" >"/tmp/small-lm-concurrent-${index}.json" &
+  concurrent_pids+=("$!")
+done
+
+for pid in "${concurrent_pids[@]}"; do
+  if ! wait "$pid"; then
+    echo "Concurrent HTTP request failed."
+    cat "$LOG_FILE"
+    exit 1
+  fi
+done
+
 python3 - <<'PY'
 import json
 from pathlib import Path
@@ -111,6 +137,21 @@ sse = Path("/tmp/small-lm-chat.sse").read_text()
 assert "chat.completion.chunk" in sse
 assert "data: [DONE]" in sse
 
+concurrent = []
+for index in range(4):
+    response = json.loads(Path(f"/tmp/small-lm-concurrent-{index}.json").read_text())
+    assert response["object"] == "chat.completion"
+    assert response["model"] == "small-lm-8m"
+    assert response["usage"]["completion_tokens"] == 4
+    assert response["choices"][0]["finish_reason"] in {"length", "stop"}
+    concurrent.append({
+        "id": response["id"],
+        "completion_tokens": response["usage"]["completion_tokens"],
+        "finish_reason": response["choices"][0]["finish_reason"],
+    })
+
+assert len({item["id"] for item in concurrent}) == 4
+
 print(json.dumps(
     {
         "health": health,
@@ -118,6 +159,7 @@ print(json.dumps(
         "finish_reason": chat["choices"][0]["finish_reason"],
         "usage": chat["usage"],
         "sse_done": True,
+        "concurrent_requests": concurrent,
     },
     indent=2,
 ))
