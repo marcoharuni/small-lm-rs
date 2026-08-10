@@ -1,8 +1,8 @@
 //! Stateful generation sessions for scheduler-driven decoding.
 
+use crate::decode_backend::DecodeBackend;
 use crate::error::{EngineError, Result};
 use crate::kv_cache::KvCache;
-use crate::model::SmallLMModel;
 use crate::sampler::{Sampler, SamplingConfig};
 
 /// Terminal reason for one generation session.
@@ -50,8 +50,8 @@ impl GenerationSession {
     /// # Errors
     ///
     /// Returns input, context, model, cache, or sampling errors.
-    pub fn prefill(
-        model: &SmallLMModel,
+    pub fn prefill<M: DecodeBackend + ?Sized>(
+        model: &M,
         prompt_token_ids: &[u32],
         max_new_tokens: usize,
         eos_token_id: Option<u32>,
@@ -118,7 +118,7 @@ impl GenerationSession {
         self.cache.sequence_length()
     }
 
-    fn pending_decode_token(&self) -> Result<u32> {
+    pub(crate) fn pending_decode_token(&self) -> Result<u32> {
         if self.is_finished() {
             return Err(EngineError::invalid_input(
                 "generation session",
@@ -133,7 +133,11 @@ impl GenerationSession {
         })
     }
 
-    fn accept_logits(&mut self, logits: &[f32]) -> Result<u32> {
+    pub(crate) const fn cache_mut(&mut self) -> &mut KvCache {
+        &mut self.cache
+    }
+
+    pub(crate) fn accept_logits(&mut self, logits: &[f32]) -> Result<u32> {
         if self.is_finished() {
             return Err(EngineError::invalid_input(
                 "generation session",
@@ -164,7 +168,7 @@ impl GenerationSession {
     ///
     /// Returns an invalid-input error when called after completion, or
     /// propagates model, cache, and sampling errors.
-    pub fn advance(&mut self, model: &SmallLMModel) -> Result<u32> {
+    pub fn advance<M: DecodeBackend + ?Sized>(&mut self, model: &M) -> Result<u32> {
         let input_token = self.pending_decode_token()?;
         let logits = model.forward_cached_token(input_token, &mut self.cache)?;
         self.accept_logits(&logits)
@@ -186,8 +190,8 @@ impl GenerationSession {
     }
 }
 
-fn validate_generation_inputs(
-    model: &SmallLMModel,
+fn validate_generation_inputs<M: DecodeBackend + ?Sized>(
+    model: &M,
     prompt_token_ids: &[u32],
     max_new_tokens: usize,
     eos_token_id: Option<u32>,
