@@ -6,8 +6,9 @@
 //! causal grouped-query attention, transformer blocks, and complete uncached
 //! full-model prefill logits, JAX reference parity, uncached greedy decoding,
 //! dense per-layer KV storage, cache-populating prompt prefill, full-model
-//! cached decoding, deterministic greedy generation, and temperature/top-k/
-//! top-p sampling.
+//! cached decoding, deterministic greedy generation, temperature/top-k/top-p
+//! sampling, and token-stepped generation sessions for scheduler-driven
+//! decoding.
 
 #![forbid(unsafe_code)]
 
@@ -27,6 +28,7 @@ pub mod rmsnorm;
 pub mod rope;
 pub mod sampler;
 pub mod service;
+pub mod session;
 pub mod situ_glu;
 pub mod softmax;
 mod tensor;
@@ -39,3 +41,4 @@ pub use error::{EngineError, Result};
 pub use generation_config::GenerationConfig;
 pub use model::SmallLMModel;
 pub use service::{ArtifactPaths, GenerationService, ServiceGenerationOutput};
+pub use session::{GenerationFinishReason, GenerationSession};
