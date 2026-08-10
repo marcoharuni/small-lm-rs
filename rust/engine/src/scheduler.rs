@@ -1,7 +1,7 @@
 //! Continuous scheduling for independent generation sessions.
 
+use crate::decode_backend::DecodeBackend;
 use crate::error::{EngineError, Result};
-use crate::model::SmallLMModel;
 use crate::sampler::SamplingConfig;
 use crate::session::{GenerationFinishReason, GenerationSession};
 
@@ -67,13 +67,11 @@ struct ActiveSequence {
     prefill_token_pending: bool,
 }
 
-/// Request scheduler that interleaves token-stepped generation sessions.
+/// Request scheduler for continuously admitted generation sessions.
 ///
 /// Each call to [`Self::step`] emits or advances every active sequence at most
-/// once. This establishes continuous admission, independent request state, and
-/// completion removal. The current implementation executes per-sequence model
-/// calls serially; a batched decode kernel can replace that execution detail
-/// without changing scheduler semantics.
+/// once. Decode-ready requests are collected into one backend batch while
+/// preserving independent sampler and KV-cache state for every sequence.
 #[derive(Debug)]
 pub struct GenerationScheduler {
     config: SchedulerConfig,
@@ -125,9 +123,9 @@ impl GenerationScheduler {
     ///
     /// Returns an invalid-input error when scheduler capacity is exhausted, or
     /// propagates model, context, cache, and sampling failures from prefill.
-    pub fn admit(
+    pub fn admit<M: DecodeBackend + ?Sized>(
         &mut self,
-        model: &SmallLMModel,
+        model: &M,
         prompt_token_ids: &[u32],
         max_new_tokens: usize,
         eos_token_id: Option<u32>,
@@ -164,17 +162,19 @@ impl GenerationScheduler {
 
     /// Emit or advance each active sequence by at most one token.
     ///
-    /// A newly admitted sequence first emits the token sampled during prompt
-    /// prefill. Later steps perform one cached decode operation. Finished
-    /// sequences are removed after their terminal token has been reported.
+    /// Newly admitted sequences first emit the token sampled during prompt
+    /// prefill. All already decode-ready sequences are then evaluated through
+    /// one [`DecodeBackend::forward_cached_batch`] call. Finished sequences are
+    /// removed after their terminal token has been reported.
     ///
     /// # Errors
     ///
-    /// Propagates model, cache, or sampling failures from any active session.
-    pub fn step(&mut self, model: &SmallLMModel) -> Result<Vec<TokenEvent>> {
-        let mut events = Vec::with_capacity(self.active.len());
+    /// Propagates backend, cache, batch-shape, or sampling failures.
+    pub fn step<M: DecodeBackend + ?Sized>(&mut self, model: &M) -> Result<Vec<TokenEvent>> {
+        let mut event_slots = vec![None; self.active.len()];
+        let mut decode_ready = vec![false; self.active.len()];
 
-        for sequence in &mut self.active {
+        for (index, sequence) in self.active.iter_mut().enumerate() {
             if sequence.prefill_token_pending {
                 let token_id = *sequence
                     .session
@@ -187,7 +187,7 @@ impl GenerationScheduler {
                         )
                     })?;
                 sequence.prefill_token_pending = false;
-                events.push(TokenEvent {
+                event_slots[index] = Some(TokenEvent {
                     sequence_id: sequence.id,
                     token_id,
                     finish_reason: sequence.session.finish_reason(),
@@ -201,18 +201,79 @@ impl GenerationScheduler {
                     "finished session remained active after its terminal event",
                 ));
             }
+            decode_ready[index] = true;
+        }
 
-            let token_id = sequence.session.advance(model)?;
-            events.push(TokenEvent {
-                sequence_id: sequence.id,
-                token_id,
-                finish_reason: sequence.session.finish_reason(),
-            });
+        let token_ids = self
+            .active
+            .iter()
+            .zip(&decode_ready)
+            .filter_map(|(sequence, &ready)| ready.then_some(&sequence.session))
+            .map(GenerationSession::pending_decode_token)
+            .collect::<Result<Vec<_>>>()?;
+
+        if !token_ids.is_empty() {
+            let logits = {
+                let mut caches = self
+                    .active
+                    .iter_mut()
+                    .zip(&decode_ready)
+                    .filter_map(|(sequence, &ready)| ready.then(|| sequence.session.cache_mut()))
+                    .collect::<Vec<_>>();
+                model.forward_cached_batch(&token_ids, &mut caches)?
+            };
+
+            let vocab_size = model.config().vocab_size;
+            let expected_logits = token_ids.len().checked_mul(vocab_size).ok_or_else(|| {
+                EngineError::invalid_input(
+                    "generation scheduler",
+                    "batched logit count overflows usize",
+                )
+            })?;
+            if logits.len() != expected_logits {
+                return Err(EngineError::invalid_input(
+                    "generation scheduler",
+                    format!(
+                        "backend returned {} logits for {} requests, expected {expected_logits}",
+                        logits.len(),
+                        token_ids.len()
+                    ),
+                ));
+            }
+
+            let mut row_index = 0_usize;
+            for (index, (sequence, &ready)) in
+                self.active.iter_mut().zip(&decode_ready).enumerate()
+            {
+                if !ready {
+                    continue;
+                }
+                let row_start = row_index.checked_mul(vocab_size).ok_or_else(|| {
+                    EngineError::invalid_input(
+                        "generation scheduler",
+                        "logit row offset overflows usize",
+                    )
+                })?;
+                let row_end = row_start.checked_add(vocab_size).ok_or_else(|| {
+                    EngineError::invalid_input(
+                        "generation scheduler",
+                        "logit row end overflows usize",
+                    )
+                })?;
+                let row = &logits[row_start..row_end];
+                let token_id = sequence.session.accept_logits(row)?;
+                event_slots[index] = Some(TokenEvent {
+                    sequence_id: sequence.id,
+                    token_id,
+                    finish_reason: sequence.session.finish_reason(),
+                });
+                row_index += 1;
+            }
         }
 
         self.active
             .retain(|sequence| !sequence.session.is_finished());
-        Ok(events)
+        Ok(event_slots.into_iter().flatten().collect())
     }
 }
 
