@@ -242,8 +242,7 @@ impl GenerationScheduler {
             }
 
             let mut row_index = 0_usize;
-            for (index, (sequence, &ready)) in
-                self.active.iter_mut().zip(&decode_ready).enumerate()
+            for (index, (sequence, &ready)) in self.active.iter_mut().zip(&decode_ready).enumerate()
             {
                 if !ready {
                     continue;

@@ -86,7 +86,10 @@ fn batched_scheduler_matches_independent_generation() {
     let mut actual = HashMap::<SequenceId, Vec<u32>>::new();
     let mut finish_reasons = HashMap::<SequenceId, String>::new();
     while scheduler.active_sequence_count() > 0 {
-        for event in scheduler.step(&batched_model).expect("batched scheduler step") {
+        for event in scheduler
+            .step(&batched_model)
+            .expect("batched scheduler step")
+        {
             actual
                 .entry(event.sequence_id)
                 .or_default()

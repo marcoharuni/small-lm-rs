@@ -94,7 +94,10 @@ impl DecodeBackend for SmallLMModel {
                 .len()
                 .checked_mul(self.config().vocab_size)
                 .ok_or_else(|| {
-                    EngineError::invalid_input("decode backend batch", "logit count overflows usize")
+                    EngineError::invalid_input(
+                        "decode backend batch",
+                        "logit count overflows usize",
+                    )
                 })?,
         );
 
