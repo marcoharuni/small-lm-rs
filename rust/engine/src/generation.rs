@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{EngineError, Result};
 use crate::model::SmallLMModel;
-use crate::sampler::{Sampler, SamplingConfig};
+use crate::sampler::SamplingConfig;
+use crate::session::GenerationSession;
 use crate::tokenizer::SmallLMTokenizer;
 
 /// A single text-generation request.
@@ -66,6 +67,9 @@ pub struct GenerationOutput {
 
 /// Generate token identifiers using prompt prefill and KV-cached decoding.
 ///
+/// The request is executed through [`GenerationSession`], the same
+/// token-stepped state machine used by scheduler-driven generation.
+///
 /// # Errors
 ///
 /// Returns request, context, EOS, model, cache, or sampling errors.
@@ -76,74 +80,20 @@ pub fn generate_token_ids(
     eos_token_id: Option<u32>,
     sampling: SamplingConfig,
 ) -> Result<TokenGenerationOutput> {
-    if prompt_token_ids.is_empty() {
-        return Err(EngineError::invalid_input(
-            "generation",
-            "the tokenized prompt must not be empty",
-        ));
+    let mut session = GenerationSession::prefill(
+        model,
+        prompt_token_ids,
+        max_new_tokens,
+        eos_token_id,
+        sampling,
+    )?;
+    while !session.is_finished() {
+        session.advance(model)?;
     }
-    if max_new_tokens == 0 {
-        return Err(EngineError::invalid_input(
-            "generation",
-            "max_new_tokens must be greater than zero",
-        ));
-    }
-    if let Some(eos_token_id) = eos_token_id {
-        if eos_token_id as usize >= model.config().vocab_size {
-            return Err(EngineError::invalid_input(
-                "generation",
-                "EOS token is outside the model vocabulary",
-            ));
-        }
-    }
-    let requested_length = prompt_token_ids
-        .len()
-        .checked_add(max_new_tokens)
-        .ok_or_else(|| {
-            EngineError::invalid_input("generation", "requested length overflows usize")
-        })?;
-    if requested_length > model.config().context_length {
-        return Err(EngineError::invalid_input(
-            "generation",
-            format!(
-                "requested length {requested_length} exceeds context length {}",
-                model.config().context_length
-            ),
-        ));
-    }
-
-    let mut sampler = Sampler::new(sampling)?;
-    let mut cache = model.allocate_kv_cache(requested_length)?;
-    let prefill_logits = model.forward_prefill_with_cache(prompt_token_ids, &mut cache)?;
-    let mut next_token = sampler.sample(final_logits(
-        &prefill_logits,
-        prompt_token_ids.len(),
-        model.config().vocab_size,
-    )?)?;
-    let mut generated = Vec::with_capacity(max_new_tokens);
-    generated.push(next_token);
-    if eos_token_id == Some(next_token) {
-        return Ok(TokenGenerationOutput {
-            generated_token_ids: generated,
-            finish_reason: "eos".to_owned(),
-        });
-    }
-
-    for _ in 1..max_new_tokens {
-        let logits = model.forward_cached_token(next_token, &mut cache)?;
-        next_token = sampler.sample(&logits)?;
-        generated.push(next_token);
-        if eos_token_id == Some(next_token) {
-            return Ok(TokenGenerationOutput {
-                generated_token_ids: generated,
-                finish_reason: "eos".to_owned(),
-            });
-        }
-    }
-
+    let (generated_token_ids, finish_reason) = session.into_parts()?;
     Ok(TokenGenerationOutput {
-        generated_token_ids: generated,
-        finish_reason: "length".to_owned(),
+        generated_token_ids,
+        finish_reason: finish_reason.as_str().to_owned(),
     })
 }
 
@@ -202,22 +152,6 @@ pub fn generate_with_eos(
         generated_token_ids: token_output.generated_token_ids,
         finish_reason: token_output.finish_reason,
     })
-}
-
-fn final_logits(logits: &[f32], sequence_length: usize, vocab_size: usize) -> Result<&[f32]> {
-    let expected = sequence_length.checked_mul(vocab_size).ok_or_else(|| {
-        EngineError::invalid_input("generation", "prefill logit count overflows usize")
-    })?;
-    if logits.len() != expected {
-        return Err(EngineError::invalid_input(
-            "generation",
-            format!(
-                "model returned {} logits, expected {expected}",
-                logits.len()
-            ),
-        ));
-    }
-    Ok(&logits[expected - vocab_size..])
 }
 
 #[cfg(test)]
