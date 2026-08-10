@@ -1,5 +1,6 @@
 //! Batched cached transformer-block execution for active decode requests.
 
+use crate::attention::{AttentionWeights, GroupedQueryAttention};
 use crate::batched_attention::forward_cached_batch;
 use crate::config::ModelConfig;
 use crate::error::Result;
@@ -8,7 +9,6 @@ use crate::rmsnorm::RmsNorm;
 use crate::rope::RotaryEmbedding;
 use crate::situ_glu::SituGlu;
 use crate::transformer::{add_residual_in_place, TransformerBlockWeights};
-use crate::attention::{AttentionWeights, GroupedQueryAttention};
 
 /// Batched form of one pre-norm SmallLM transformer block.
 #[derive(Clone, Debug, PartialEq)]
@@ -79,11 +79,9 @@ impl BatchedTransformerBlock {
         let mut after_attention = hidden_states.to_vec();
         add_residual_in_place(&mut after_attention, &attention_output)?;
 
-        let normalized_ffn = self.ffn_norm.forward_rows(
-            &after_attention,
-            batch_size,
-            weights.ffn_norm(),
-        )?;
+        let normalized_ffn =
+            self.ffn_norm
+                .forward_rows(&after_attention, batch_size, weights.ffn_norm())?;
         let ffn_output = self.ffn.forward(
             &normalized_ffn,
             weights.gate(),

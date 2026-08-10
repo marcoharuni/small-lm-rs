@@ -115,8 +115,12 @@ fn scheduler_matches_independent_cached_generation() {
 #[test]
 fn completed_sequence_releases_capacity_for_new_admission() {
     let (model, tokenizer, generation_config) = load_runtime();
-    let first_prompt = tokenizer.encode("Hello", true).expect("first prompt encoding");
-    let second_prompt = tokenizer.encode("Rust", true).expect("second prompt encoding");
+    let first_prompt = tokenizer
+        .encode("Hello", true)
+        .expect("first prompt encoding");
+    let second_prompt = tokenizer
+        .encode("Rust", true)
+        .expect("second prompt encoding");
     let mut scheduler = GenerationScheduler::new(SchedulerConfig {
         max_active_sequences: 1,
     })

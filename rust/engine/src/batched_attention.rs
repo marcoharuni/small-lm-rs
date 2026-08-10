@@ -64,7 +64,8 @@ pub fn forward_cached_batch(
     let mut original_lengths = Vec::with_capacity(caches.len());
     for cache in caches.iter() {
         let config = cache.config();
-        if config.num_key_value_heads != key_value_heads || config.head_dimension != head_dimension {
+        if config.num_key_value_heads != key_value_heads || config.head_dimension != head_dimension
+        {
             return Err(EngineError::invalid_input(
                 "batched cached attention",
                 "KV-cache head shape does not match attention configuration",
@@ -94,14 +95,12 @@ pub fn forward_cached_batch(
         weights.value(),
     )?;
     let query_width = hidden_size;
-    let key_value_width = key_value_heads
-        .checked_mul(head_dimension)
-        .ok_or_else(|| {
-            EngineError::invalid_input(
-                "batched cached attention",
-                "key/value width overflows usize",
-            )
-        })?;
+    let key_value_width = key_value_heads.checked_mul(head_dimension).ok_or_else(|| {
+        EngineError::invalid_input(
+            "batched cached attention",
+            "key/value width overflows usize",
+        )
+    })?;
     let mut rotated = Vec::with_capacity(caches.len());
 
     for (row, &position) in original_lengths.iter().enumerate() {
@@ -112,10 +111,7 @@ pub fn forward_cached_batch(
             )
         })?;
         let query_end = query_start.checked_add(query_width).ok_or_else(|| {
-            EngineError::invalid_input(
-                "batched cached attention",
-                "query row end overflows usize",
-            )
+            EngineError::invalid_input("batched cached attention", "query row end overflows usize")
         })?;
         let kv_start = row.checked_mul(key_value_width).ok_or_else(|| {
             EngineError::invalid_input(
@@ -227,10 +223,7 @@ fn attend_requests(
             )
         })?;
         let output_end = output_start.checked_add(hidden_size).ok_or_else(|| {
-            EngineError::invalid_input(
-                "batched cached attention",
-                "output row end overflows usize",
-            )
+            EngineError::invalid_input("batched cached attention", "output row end overflows usize")
         })?;
         let output_row = &mut attended[output_start..output_end];
 
@@ -346,10 +339,7 @@ mod tests {
     fn assert_close(left: &[f32], right: &[f32]) {
         assert_eq!(left.len(), right.len());
         for (&left, &right) in left.iter().zip(right) {
-            assert!(
-                (left - right).abs() <= 1.0e-6,
-                "left={left}, right={right}"
-            );
+            assert!((left - right).abs() <= 1.0e-6, "left={left}, right={right}");
         }
     }
 
@@ -384,20 +374,10 @@ mod tests {
         let mut first_batch = cache(&config, &[0.2, -0.4], &[1.0, 2.0]);
         let mut second_batch = cache(&config, &[-0.3, 0.7], &[-1.0, 0.5]);
         let mut caches = [&mut first_batch, &mut second_batch];
-        let hidden_states = [
-            first_hidden.as_slice(),
-            second_hidden.as_slice(),
-        ]
-        .concat();
-        let actual = forward_cached_batch(
-            &attention,
-            &hidden_states,
-            0,
-            &mut caches,
-            weights,
-            &rotary,
-        )
-        .expect("batched cached attention");
+        let hidden_states = [first_hidden.as_slice(), second_hidden.as_slice()].concat();
+        let actual =
+            forward_cached_batch(&attention, &hidden_states, 0, &mut caches, weights, &rotary)
+                .expect("batched cached attention");
 
         assert_close(&actual[..4], &first_expected);
         assert_close(&actual[4..], &second_expected);
