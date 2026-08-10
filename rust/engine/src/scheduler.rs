@@ -64,15 +64,16 @@ pub struct TokenEvent {
 struct ActiveSequence {
     id: SequenceId,
     session: GenerationSession,
+    prefill_token_pending: bool,
 }
 
 /// Request scheduler that interleaves token-stepped generation sessions.
 ///
-/// Each call to [`Self::step`] advances every active sequence at most once.
-/// This establishes continuous admission, independent request state, and
-/// completion removal. The current implementation executes those per-sequence
-/// model calls serially; a batched decode kernel can replace that execution
-/// detail without changing scheduler semantics.
+/// Each call to [`Self::step`] emits or advances every active sequence at most
+/// once. This establishes continuous admission, independent request state, and
+/// completion removal. The current implementation executes per-sequence model
+/// calls serially; a batched decode kernel can replace that execution detail
+/// without changing scheduler semantics.
 #[derive(Debug)]
 pub struct GenerationScheduler {
     config: SchedulerConfig,
@@ -115,9 +116,10 @@ impl GenerationScheduler {
 
     /// Admit a prompt as a new request-local generation session.
     ///
-    /// Prompt prefill happens during admission. A future prefill scheduler can
-    /// move that work into its own batching policy without changing sequence
-    /// identifiers or decode scheduling semantics.
+    /// Prompt prefill happens during admission. The token sampled from the
+    /// final prompt logits is retained and emitted on the next scheduler step.
+    /// A future prefill scheduler can move that work into its own batching
+    /// policy without changing sequence identifiers or decode semantics.
     ///
     /// # Errors
     ///
@@ -155,15 +157,16 @@ impl GenerationScheduler {
         self.active.push(ActiveSequence {
             id: sequence_id,
             session,
+            prefill_token_pending: true,
         });
         Ok(sequence_id)
     }
 
-    /// Advance each active sequence by at most one decode token.
+    /// Emit or advance each active sequence by at most one token.
     ///
-    /// Sequences that already finished during prompt admission are reported
-    /// without an additional model call. Newly finished sequences are removed
-    /// after their terminal event is recorded.
+    /// A newly admitted sequence first emits the token sampled during prompt
+    /// prefill. Later steps perform one cached decode operation. Finished
+    /// sequences are removed after their terminal token has been reported.
     ///
     /// # Errors
     ///
@@ -172,7 +175,7 @@ impl GenerationScheduler {
         let mut events = Vec::with_capacity(self.active.len());
 
         for sequence in &mut self.active {
-            if sequence.session.is_finished() {
+            if sequence.prefill_token_pending {
                 let token_id = *sequence
                     .session
                     .generated_token_ids()
@@ -180,15 +183,23 @@ impl GenerationScheduler {
                     .ok_or_else(|| {
                         EngineError::invalid_input(
                             "generation scheduler",
-                            "finished session has no generated token",
+                            "prefilled session has no generated token",
                         )
                     })?;
+                sequence.prefill_token_pending = false;
                 events.push(TokenEvent {
                     sequence_id: sequence.id,
                     token_id,
                     finish_reason: sequence.session.finish_reason(),
                 });
                 continue;
+            }
+
+            if sequence.session.is_finished() {
+                return Err(EngineError::invalid_input(
+                    "generation scheduler",
+                    "finished session remained active after its terminal event",
+                ));
             }
 
             let token_id = sequence.session.advance(model)?;
@@ -199,7 +210,8 @@ impl GenerationScheduler {
             });
         }
 
-        self.active.retain(|sequence| !sequence.session.is_finished());
+        self.active
+            .retain(|sequence| !sequence.session.is_finished());
         Ok(events)
     }
 }
