@@ -118,30 +118,30 @@ impl GenerationSession {
         self.cache.sequence_length()
     }
 
-    /// Advance this session by exactly one cached decode step.
-    ///
-    /// The returned token is appended to [`Self::generated_token_ids`].
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-input error when called after completion, or
-    /// propagates model, cache, and sampling errors.
-    pub fn advance(&mut self, model: &SmallLMModel) -> Result<u32> {
+    fn pending_decode_token(&self) -> Result<u32> {
         if self.is_finished() {
             return Err(EngineError::invalid_input(
                 "generation session",
                 "cannot advance a finished session",
             ));
         }
-
-        let input_token = self.next_input_token.ok_or_else(|| {
+        self.next_input_token.ok_or_else(|| {
             EngineError::invalid_input(
                 "generation session",
                 "running session has no pending decode token",
             )
-        })?;
-        let logits = model.forward_cached_token(input_token, &mut self.cache)?;
-        let next_token = self.sampler.sample(&logits)?;
+        })
+    }
+
+    fn accept_logits(&mut self, logits: &[f32]) -> Result<u32> {
+        if self.is_finished() {
+            return Err(EngineError::invalid_input(
+                "generation session",
+                "cannot accept logits for a finished session",
+            ));
+        }
+
+        let next_token = self.sampler.sample(logits)?;
         self.generated_token_ids.push(next_token);
 
         if self.eos_token_id == Some(next_token) {
@@ -153,8 +153,21 @@ impl GenerationSession {
         } else {
             self.next_input_token = Some(next_token);
         }
-
         Ok(next_token)
+    }
+
+    /// Advance this session by exactly one cached decode step.
+    ///
+    /// The returned token is appended to [`Self::generated_token_ids`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-input error when called after completion, or
+    /// propagates model, cache, and sampling errors.
+    pub fn advance(&mut self, model: &SmallLMModel) -> Result<u32> {
+        let input_token = self.pending_decode_token()?;
+        let logits = model.forward_cached_token(input_token, &mut self.cache)?;
+        self.accept_logits(&logits)
     }
 
     /// Consume a completed session into generated tokens and finish reason.
