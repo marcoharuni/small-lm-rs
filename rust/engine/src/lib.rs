@@ -18,6 +18,7 @@ pub mod batched_model;
 pub mod batched_transformer;
 pub mod chat;
 pub mod config;
+pub mod decode_backend;
 pub mod embedding;
 pub mod error;
 pub mod generation;
@@ -42,6 +43,7 @@ pub mod weights;
 
 pub use batched_model::BatchedDecodeModel;
 pub use config::ModelConfig;
+pub use decode_backend::DecodeBackend;
 pub use error::{EngineError, Result};
 pub use generation_config::GenerationConfig;
 pub use model::SmallLMModel;
