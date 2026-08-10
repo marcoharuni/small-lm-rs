@@ -7,12 +7,13 @@
 //! full-model prefill logits, JAX reference parity, uncached greedy decoding,
 //! dense per-layer KV storage, cache-populating prompt prefill, full-model
 //! cached decoding, deterministic greedy generation, temperature/top-k/top-p
-//! sampling, token-stepped generation sessions, and continuous scheduling for
-//! independent request state.
+//! sampling, token-stepped generation sessions, continuous scheduling, and
+//! batched cached-attention projections for independent request state.
 
 #![forbid(unsafe_code)]
 
 pub mod attention;
+pub mod batched_attention;
 pub mod chat;
 pub mod config;
 pub mod embedding;
