@@ -8,12 +8,13 @@
 //! dense per-layer KV storage, cache-populating prompt prefill, full-model
 //! cached decoding, deterministic greedy generation, temperature/top-k/top-p
 //! sampling, token-stepped generation sessions, continuous scheduling, and
-//! batched cached-attention projections for independent request state.
+//! batched cached transformer execution for independent request state.
 
 #![forbid(unsafe_code)]
 
 pub mod attention;
 pub mod batched_attention;
+pub mod batched_transformer;
 pub mod chat;
 pub mod config;
 pub mod embedding;
