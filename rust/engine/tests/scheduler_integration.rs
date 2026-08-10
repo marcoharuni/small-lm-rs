@@ -28,11 +28,9 @@ fn scheduler_matches_independent_cached_generation() {
     let artifact = artifact_dir();
     let config =
         ModelConfig::from_json_path(artifact.join("config.json")).expect("valid model config");
-    let generation_config = GenerationConfig::from_json_path(
-        artifact.join("generation_config.json"),
-        &config,
-    )
-    .expect("valid generation config");
+    let generation_config =
+        GenerationConfig::from_json_path(artifact.join("generation_config.json"), &config)
+            .expect("valid generation config");
     let tokenizer =
         SmallLMTokenizer::from_file(artifact.join("tokenizer.json")).expect("valid tokenizer");
     let mut model = SmallLMModel::from_config(config).expect("valid model");
@@ -94,10 +92,8 @@ fn scheduler_matches_independent_cached_generation() {
         }
     }
 
-    for ((sequence_id, expected_output), prompt) in sequence_ids
-        .iter()
-        .zip(expected.iter())
-        .zip(prompts.iter())
+    for ((sequence_id, expected_output), prompt) in
+        sequence_ids.iter().zip(expected.iter()).zip(prompts.iter())
     {
         assert_eq!(
             actual.get(sequence_id).map(Vec::as_slice),
