@@ -7,8 +7,8 @@
 //! full-model prefill logits, JAX reference parity, uncached greedy decoding,
 //! dense per-layer KV storage, cache-populating prompt prefill, full-model
 //! cached decoding, deterministic greedy generation, temperature/top-k/top-p
-//! sampling, and token-stepped generation sessions for scheduler-driven
-//! decoding.
+//! sampling, token-stepped generation sessions, and continuous scheduling for
+//! independent request state.
 
 #![forbid(unsafe_code)]
 
@@ -27,6 +27,7 @@ pub mod parity;
 pub mod rmsnorm;
 pub mod rope;
 pub mod sampler;
+pub mod scheduler;
 pub mod service;
 pub mod session;
 pub mod situ_glu;
@@ -40,5 +41,6 @@ pub use config::ModelConfig;
 pub use error::{EngineError, Result};
 pub use generation_config::GenerationConfig;
 pub use model::SmallLMModel;
+pub use scheduler::{GenerationScheduler, SchedulerConfig, SequenceId, TokenEvent};
 pub use service::{ArtifactPaths, GenerationService, ServiceGenerationOutput};
 pub use session::{GenerationFinishReason, GenerationSession};
