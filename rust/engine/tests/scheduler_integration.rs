@@ -23,8 +23,7 @@ fn greedy() -> SamplingConfig {
     }
 }
 
-#[test]
-fn scheduler_matches_independent_cached_generation() {
+fn load_runtime() -> (SmallLMModel, SmallLMTokenizer, GenerationConfig) {
     let artifact = artifact_dir();
     let config =
         ModelConfig::from_json_path(artifact.join("config.json")).expect("valid model config");
@@ -37,7 +36,12 @@ fn scheduler_matches_independent_cached_generation() {
     model
         .load_weights(artifact.join("model.safetensors"))
         .expect("valid model weights");
+    (model, tokenizer, generation_config)
+}
 
+#[test]
+fn scheduler_matches_independent_cached_generation() {
+    let (model, tokenizer, generation_config) = load_runtime();
     let prompts = ["Hello", "Rust"];
     let prompt_tokens = prompts
         .iter()
@@ -106,4 +110,43 @@ fn scheduler_matches_independent_cached_generation() {
             "scheduler finish reason differs for prompt {prompt:?}"
         );
     }
+}
+
+#[test]
+fn completed_sequence_releases_capacity_for_new_admission() {
+    let (model, tokenizer, generation_config) = load_runtime();
+    let first_prompt = tokenizer.encode("Hello", true).expect("first prompt encoding");
+    let second_prompt = tokenizer.encode("Rust", true).expect("second prompt encoding");
+    let mut scheduler = GenerationScheduler::new(SchedulerConfig {
+        max_active_sequences: 1,
+    })
+    .expect("valid scheduler");
+
+    scheduler
+        .admit(
+            &model,
+            &first_prompt,
+            1,
+            Some(generation_config.eos_token_id),
+            greedy(),
+        )
+        .expect("first admission");
+    assert!(!scheduler.has_capacity());
+
+    let events = scheduler.step(&model).expect("terminal prefill event");
+    assert_eq!(events.len(), 1);
+    assert!(events[0].finish_reason.is_some());
+    assert_eq!(scheduler.active_sequence_count(), 0);
+    assert!(scheduler.has_capacity());
+
+    scheduler
+        .admit(
+            &model,
+            &second_prompt,
+            1,
+            Some(generation_config.eos_token_id),
+            greedy(),
+        )
+        .expect("capacity should be reusable");
+    assert_eq!(scheduler.active_sequence_count(), 1);
 }
