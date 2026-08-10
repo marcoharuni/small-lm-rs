@@ -242,4 +242,8 @@ I used ChatGPT and Codex as engineering assistants during parts of the developme
 
 I made the model and systems design decisions, configured and ran the data preparation, pretraining, instruction-tuning and export workflows, ran the CPU benchmarks, tested the Rust runtime and API, reviewed and integrated changes, investigated failures, and validated the final implementation with the test suite and JAX/Rust numerical parity checks.
 
+## Future plans
+
+The long-term direction is to evolve `small-lm-rs` from a compact CPU reference engine into a broader hardware-aware inference runtime. Planned work includes continuous batching, INT8/INT4/FP8 quantization, optimized SIMD and GPU kernels, paged KV caching, FlashAttention-style tiled attention, chunked prefill, prefix caching, speculative decoding, token-progressive streaming, stronger performance and correctness benchmarking, and distributed tensor, pipeline, context, and expert parallelism. The goal is to progressively support model scales from millions to billions and, where distributed hardware permits, trillion-parameter systems, while extending beyond dense decoder-only Transformers to Mixture-of-Experts models, Mamba/state-space models, Vision Transformers, and multimodal architectures.
+
 Thank you.
