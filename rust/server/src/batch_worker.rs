@@ -73,10 +73,12 @@ impl BatchRuntime {
         thread::Builder::new()
             .name("smalllm-batch-worker".to_owned())
             .spawn(move || run_scheduler(model, receiver, scheduler_config, eos_token_id))
-            .map_err(|source| EngineError::invalid_input(
-                "batch worker",
-                format!("failed to spawn scheduler thread: {source}"),
-            ))?;
+            .map_err(|source| {
+                EngineError::invalid_input(
+                    "batch worker",
+                    format!("failed to spawn scheduler thread: {source}"),
+                )
+            })?;
 
         Ok(Self {
             sender,
@@ -153,26 +155,18 @@ fn run_scheduler(
     loop {
         if scheduler.active_sequence_count() == 0 && !disconnected {
             match receiver.recv() {
-                Ok(command) => admit_command(
-                    &model,
-                    &mut scheduler,
-                    &mut pending,
-                    command,
-                    eos_token_id,
-                ),
+                Ok(command) => {
+                    admit_command(&model, &mut scheduler, &mut pending, command, eos_token_id)
+                }
                 Err(_) => disconnected = true,
             }
         }
 
         while scheduler.has_capacity() && !disconnected {
             match receiver.try_recv() {
-                Ok(command) => admit_command(
-                    &model,
-                    &mut scheduler,
-                    &mut pending,
-                    command,
-                    eos_token_id,
-                ),
+                Ok(command) => {
+                    admit_command(&model, &mut scheduler, &mut pending, command, eos_token_id)
+                }
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
                     disconnected = true;
@@ -214,10 +208,7 @@ fn run_scheduler(
                 }
             }
             Err(error) => {
-                fail_pending(
-                    &mut pending,
-                    format!("batched decode failed: {error}"),
-                );
+                fail_pending(&mut pending, format!("batched decode failed: {error}"));
                 scheduler = GenerationScheduler::new(config)
                     .expect("validated scheduler config remains valid");
             }

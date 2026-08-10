@@ -4,9 +4,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use smalllm_engine::chat::{
-    format_chat_prompt, ChatMessage as EngineChatMessage, ChatRole,
-};
+use smalllm_engine::chat::{format_chat_prompt, ChatMessage as EngineChatMessage, ChatRole};
 use smalllm_engine::sampler::SamplingConfig;
 use smalllm_engine::service::ServiceGenerationOutput;
 use smalllm_engine::EngineError;

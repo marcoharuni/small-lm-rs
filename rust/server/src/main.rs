@@ -103,12 +103,8 @@ mod tests {
 
     #[test]
     fn batch_capacity_is_configurable() {
-        let args = Args::try_parse_from([
-            "small-lm-server",
-            "--max-active-sequences",
-            "4",
-        ])
-        .expect("batch capacity parses");
+        let args = Args::try_parse_from(["small-lm-server", "--max-active-sequences", "4"])
+            .expect("batch capacity parses");
 
         assert_eq!(args.max_active_sequences, 4);
     }
