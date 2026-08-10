@@ -57,12 +57,8 @@ impl GenerationSession {
         eos_token_id: Option<u32>,
         sampling: SamplingConfig,
     ) -> Result<Self> {
-        let requested_length = validate_generation_inputs(
-            model,
-            prompt_token_ids,
-            max_new_tokens,
-            eos_token_id,
-        )?;
+        let requested_length =
+            validate_generation_inputs(model, prompt_token_ids, max_new_tokens, eos_token_id)?;
         let mut sampler = Sampler::new(sampling)?;
         let mut cache = model.allocate_kv_cache(requested_length)?;
         let prefill_logits = model.forward_prefill_with_cache(prompt_token_ids, &mut cache)?;
@@ -276,8 +272,7 @@ mod tests {
     fn generation_inputs_reserve_prompt_and_decode_capacity() {
         let model = tiny_model();
         assert_eq!(
-            validate_generation_inputs(&model, &[1, 2, 3], 4, Some(7))
-                .expect("valid generation"),
+            validate_generation_inputs(&model, &[1, 2, 3], 4, Some(7)).expect("valid generation"),
             7
         );
     }
