@@ -83,3 +83,9 @@ jobs:
         run: cargo run --quiet --release -p smalllm-engine --example parity -- artifacts/small-lm-8m
       - name: OpenAI-compatible server smoke test
         run: bash scripts/smoke_server.sh artifacts/small-lm-8m
+      - name: Continuous batching benchmark
+        if: github.event_name == 'pull_request' && github.head_ref == 'perf-roadmap'
+        env:
+          SMALLLM_BENCH_MAX_TOKENS: "8"
+          SMALLLM_BENCH_ROUNDS: "3"
+        run: python3 scripts/benchmark_concurrency.py artifacts/small-lm-8m
