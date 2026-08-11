@@ -110,7 +110,11 @@ mod tests {
 
     #[test]
     fn projection_applies_one_scale_per_output_row() {
-        let weight = matrix([2, 2], vec![127, -127, 64, 32], vec![1.0 / 127.0, 0.5 / 64.0]);
+        let weight = matrix(
+            [2, 2],
+            vec![127, -127, 64, 32],
+            vec![1.0 / 127.0, 0.5 / 64.0],
+        );
         let output = linear_int8(&[2.0, 1.0], 1, 2, &weight, 2).expect("valid projection");
 
         assert_eq!(output.len(), 2);
