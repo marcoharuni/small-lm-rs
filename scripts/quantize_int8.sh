@@ -16,7 +16,7 @@ uv run --frozen python -m smalllm.quantization "$input" "$output"
 
 input_bytes="$(stat -c%s "$input")"
 output_bytes="$(stat -c%s "$output")"
-python - "$input_bytes" "$output_bytes" <<'PY'
+uv run --frozen python - "$input_bytes" "$output_bytes" <<'PY'
 import sys
 
 source = int(sys.argv[1])
