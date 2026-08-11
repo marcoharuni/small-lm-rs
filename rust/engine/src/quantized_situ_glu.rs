@@ -40,9 +40,7 @@ impl QuantizedSituGlu {
         if hidden_states.is_empty() || hidden_states.len() % hidden_size != 0 {
             return Err(EngineError::invalid_input(
                 "quantized SiTU-GLU",
-                format!(
-                    "hidden-state length must be a non-zero multiple of {hidden_size}"
-                ),
+                format!("hidden-state length must be a non-zero multiple of {hidden_size}"),
             ));
         }
 
@@ -55,8 +53,7 @@ impl QuantizedSituGlu {
             .into_iter()
             .zip(up)
             .map(|(gate_value, up_value)| {
-                self.operation.gate_activation(gate_value)
-                    * self.operation.up_activation(up_value)
+                self.operation.gate_activation(gate_value) * self.operation.up_activation(up_value)
             })
             .collect::<Vec<_>>();
 
