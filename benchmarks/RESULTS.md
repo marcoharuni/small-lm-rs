@@ -61,3 +61,58 @@ Re-run the continuous-batching benchmark with:
 ```bash
 python3 scripts/benchmark_concurrency.py artifacts/small-lm-8m
 ```
+
+## Weight-only INT8 benchmark
+
+Milestone 2 adds symmetric per-output-channel INT8 storage for the transformer projection matrices while keeping embeddings and normalization parameters in FP32. The current `linear_int8` implementation is the correctness/reference path: it dequantizes weights during the dot product and accumulates in FP32. Dedicated SIMD/AVX2 kernels are intentionally deferred to Milestone 3.
+
+The measurements below were collected locally on an **HP EliteBook Folio 9480m** on 11 August 2026. They are machine-specific and should not be interpreted as portable speedups or slowdowns.
+
+### Artifact size and numerical agreement
+
+| Metric | Result |
+| --- | ---: |
+| FP32 artifact | 30.52 MiB |
+| INT8 artifact | 13.73 MiB |
+| Artifact-size reduction | 55.03% |
+| Prefill values compared | 81,920 |
+| Prefill max absolute error | 0.171354294 |
+| Prefill mean absolute error | 0.024274951 |
+| Prefill RMSE | 0.031206548 |
+| Prefill cosine similarity | 0.999945633 |
+| Decode values compared | 8,192 |
+| Decode max absolute error | 0.109609604 |
+| Decode mean absolute error | 0.018964311 |
+| Decode RMSE | 0.023685229 |
+| Decode cosine similarity | 0.999976331 |
+| Decode top-1 agreement | true |
+
+The INT8 path therefore preserves very high logit-direction agreement and selected the same checked decode top-1 token, while materially reducing the serialized model size.
+
+### 20-run timing and peak RSS
+
+Both modes use the same ten-token prompt and one cached decode step. The benchmark warms the model once before measuring 20 iterations. Peak RSS is collected by `/usr/bin/time -v` in separate FP32 and INT8 processes.
+
+| Metric | FP32 | INT8 | Change |
+| --- | ---: | ---: | ---: |
+| Mean prefill latency | 108.003 ms | 150.859 ms | +39.7% |
+| Mean cached-decode latency | 17.576 ms | 20.157 ms | +14.7% |
+| Peak RSS | 65.46 MiB | 31.89 MiB | -51.3% |
+| Decode top-1 checksum | 5260 | 5260 | identical |
+
+These results show the intended Milestone-2 tradeoff clearly: **weight-only INT8 cuts resident memory by about half, but the current scalar/reference dequantization path is slower than FP32 on this machine**. No INT8 speedup is claimed. Milestone 3 targets optimized quantized compute and AVX2/SIMD while preserving this correctness contract.
+
+Generate the INT8 artifact and compare logits with:
+
+```bash
+bash scripts/quantize_int8.sh
+cargo run --release -p smalllm-engine --example int8_compare -- artifacts/small-lm-8m
+```
+
+Run the repeatable timing benchmark with:
+
+```bash
+cargo build --release -p smalllm-engine --example int8_benchmark
+/usr/bin/time -v target/release/examples/int8_benchmark fp32 artifacts/small-lm-8m 20
+/usr/bin/time -v target/release/examples/int8_benchmark int8 artifacts/small-lm-8m 20
+```
