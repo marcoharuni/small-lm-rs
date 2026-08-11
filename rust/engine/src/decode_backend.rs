@@ -79,12 +79,9 @@ impl DecodeBackend for SmallLMModel {
         token_ids: &[u32],
         caches: &mut [&mut KvCache],
     ) -> Result<Vec<f32>> {
-        sequential_cached_batch(
-            self.config(),
-            token_ids,
-            caches,
-            |token_id, cache| SmallLMModel::forward_cached_token(self, token_id, cache),
-        )
+        sequential_cached_batch(self.config(), token_ids, caches, |token_id, cache| {
+            SmallLMModel::forward_cached_token(self, token_id, cache)
+        })
     }
 }
 
@@ -144,12 +141,9 @@ impl DecodeBackend for QuantizedDecodeModel {
         token_ids: &[u32],
         caches: &mut [&mut KvCache],
     ) -> Result<Vec<f32>> {
-        sequential_cached_batch(
-            self.config(),
-            token_ids,
-            caches,
-            |token_id, cache| QuantizedDecodeModel::forward_cached_token(self, token_id, cache),
-        )
+        sequential_cached_batch(self.config(), token_ids, caches, |token_id, cache| {
+            QuantizedDecodeModel::forward_cached_token(self, token_id, cache)
+        })
     }
 }
 
