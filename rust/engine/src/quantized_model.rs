@@ -7,9 +7,7 @@ use crate::embedding::embedding_lookup;
 use crate::error::{EngineError, Result};
 use crate::kv_cache::{KvCache, KvCacheConfig};
 use crate::linear::linear_fp32;
-use crate::quantized_transformer::{
-    QuantizedTransformerBlock, QuantizedTransformerBlockWeights,
-};
+use crate::quantized_transformer::{QuantizedTransformerBlock, QuantizedTransformerBlockWeights};
 use crate::quantized_weights::QuantizedModelWeights;
 use crate::rmsnorm::RmsNorm;
 
@@ -70,7 +68,10 @@ impl QuantizedDecodeModel {
     ///
     /// Returns invalid cache-capacity errors.
     pub fn allocate_kv_cache(&self, max_sequence_length: usize) -> Result<KvCache> {
-        KvCache::allocate(KvCacheConfig::from_model(&self.config, max_sequence_length)?)
+        KvCache::allocate(KvCacheConfig::from_model(
+            &self.config,
+            max_sequence_length,
+        )?)
     }
 
     fn loaded_weights(&self) -> Result<&QuantizedModelWeights> {
@@ -228,12 +229,8 @@ impl QuantizedDecodeModel {
             for (layer_index, block) in self.blocks.iter().enumerate() {
                 let block_weights =
                     QuantizedTransformerBlockWeights::from_model_weights(weights, layer_index)?;
-                hidden_state = block.forward_cached_token(
-                    &hidden_state,
-                    layer_index,
-                    cache,
-                    block_weights,
-                )?;
+                hidden_state =
+                    block.forward_cached_token(&hidden_state, layer_index, cache, block_weights)?;
             }
             let expected_length = original_length.checked_add(1).ok_or_else(|| {
                 EngineError::invalid_input("INT8 cached decode", "sequence length overflows usize")
