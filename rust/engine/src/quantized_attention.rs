@@ -66,7 +66,9 @@ impl QuantizedGroupedQueryAttention {
     fn kv_width(&self) -> Result<usize> {
         self.num_key_value_heads
             .checked_mul(self.head_dimension)
-            .ok_or_else(|| EngineError::invalid_input("quantized attention", "KV width overflows usize"))
+            .ok_or_else(|| {
+                EngineError::invalid_input("quantized attention", "KV width overflows usize")
+            })
     }
 
     fn group_size(&self) -> usize {
@@ -86,9 +88,21 @@ impl QuantizedGroupedQueryAttention {
             self.hidden_size,
         )?;
         let kv_width = self.kv_width()?;
-        let query = linear_int8(hidden_states, rows, self.hidden_size, weights.query, self.hidden_size)?;
+        let query = linear_int8(
+            hidden_states,
+            rows,
+            self.hidden_size,
+            weights.query,
+            self.hidden_size,
+        )?;
         let key = linear_int8(hidden_states, rows, self.hidden_size, weights.key, kv_width)?;
-        let value = linear_int8(hidden_states, rows, self.hidden_size, weights.value, kv_width)?;
+        let value = linear_int8(
+            hidden_states,
+            rows,
+            self.hidden_size,
+            weights.value,
+            kv_width,
+        )?;
         Ok((query, key, value))
     }
 
@@ -124,7 +138,13 @@ impl QuantizedGroupedQueryAttention {
         Ok(())
     }
 
-    fn attend_prefill(&self, query: &[f32], key: &[f32], value: &[f32], rows: usize) -> Result<Vec<f32>> {
+    fn attend_prefill(
+        &self,
+        query: &[f32],
+        key: &[f32],
+        value: &[f32],
+        rows: usize,
+    ) -> Result<Vec<f32>> {
         let kv_width = self.kv_width()?;
         validate_matrix("quantized attention query", query, rows, self.hidden_size)?;
         validate_matrix("quantized attention key", key, rows, kv_width)?;
@@ -143,7 +163,8 @@ impl QuantizedGroupedQueryAttention {
             let kv_head = query_head / self.group_size();
             for query_position in 0..rows {
                 let probability_row = (query_head * rows + query_position) * rows;
-                let query_start = query_position * self.hidden_size + query_head * self.head_dimension;
+                let query_start =
+                    query_position * self.hidden_size + query_head * self.head_dimension;
                 let query_values = &query[query_start..query_start + self.head_dimension];
                 for source_position in 0..=query_position {
                     let key_start = source_position * kv_width + kv_head * self.head_dimension;
@@ -163,7 +184,8 @@ impl QuantizedGroupedQueryAttention {
             for query_head in 0..self.num_query_heads {
                 let kv_head = query_head / self.group_size();
                 let probability_row = (query_head * rows + query_position) * rows;
-                let output_start = query_position * self.hidden_size + query_head * self.head_dimension;
+                let output_start =
+                    query_position * self.hidden_size + query_head * self.head_dimension;
                 let output_head = &mut attended[output_start..output_start + self.head_dimension];
                 for source_position in 0..rows {
                     let probability = probabilities[probability_row + source_position];
@@ -181,7 +203,12 @@ impl QuantizedGroupedQueryAttention {
         Ok(attended)
     }
 
-    fn attend_cached_query(&self, query: &[f32], layer_index: usize, cache: &KvCache) -> Result<Vec<f32>> {
+    fn attend_cached_query(
+        &self,
+        query: &[f32],
+        layer_index: usize,
+        cache: &KvCache,
+    ) -> Result<Vec<f32>> {
         validate_matrix(
             "quantized cached attention query",
             query,
@@ -202,8 +229,8 @@ impl QuantizedGroupedQueryAttention {
             let kv_head = query_head / self.group_size();
             let query_start = query_head * self.head_dimension;
             let query_values = &query[query_start..query_start + self.head_dimension];
-            let row = &mut probabilities
-                [query_head * source_length..(query_head + 1) * source_length];
+            let row =
+                &mut probabilities[query_head * source_length..(query_head + 1) * source_length];
             for (source_position, score) in row.iter_mut().enumerate() {
                 let key = cache.key_head(layer_index, source_position, kv_head)?;
                 let dot = query_values
@@ -253,7 +280,13 @@ impl QuantizedGroupedQueryAttention {
         let (mut query, mut key, value) = self.project_qkv(hidden_states, rows, weights)?;
         self.apply_rotary(&mut query, &mut key, rows, 0)?;
         let attended = self.attend_prefill(&query, &key, &value, rows)?;
-        let output = linear_int8(&attended, rows, self.hidden_size, weights.output, self.hidden_size)?;
+        let output = linear_int8(
+            &attended,
+            rows,
+            self.hidden_size,
+            weights.output,
+            self.hidden_size,
+        )?;
         cache.append_layer(layer_index, &key, &value, rows)?;
         Ok(output)
     }
@@ -271,7 +304,12 @@ impl QuantizedGroupedQueryAttention {
         cache: &mut KvCache,
         weights: QuantizedAttentionWeights<'_>,
     ) -> Result<Vec<f32>> {
-        validate_matrix("quantized cached hidden state", hidden_state, 1, self.hidden_size)?;
+        validate_matrix(
+            "quantized cached hidden state",
+            hidden_state,
+            1,
+            self.hidden_size,
+        )?;
         let original_length = cache.layer_sequence_length(layer_index)?;
         let (mut query, mut key, value) = self.project_qkv(hidden_state, 1, weights)?;
         self.apply_rotary(&mut query, &mut key, 1, original_length)?;
@@ -279,7 +317,13 @@ impl QuantizedGroupedQueryAttention {
 
         let result = (|| {
             let attended = self.attend_cached_query(&query, layer_index, cache)?;
-            linear_int8(&attended, 1, self.hidden_size, weights.output, self.hidden_size)
+            linear_int8(
+                &attended,
+                1,
+                self.hidden_size,
+                weights.output,
+                self.hidden_size,
+            )
         })();
 
         match result {
@@ -323,7 +367,8 @@ mod tests {
             dropout: 0.0,
             expected_parameter_count: 1,
         };
-        let attention = QuantizedGroupedQueryAttention::from_config(&config).expect("valid attention");
+        let attention =
+            QuantizedGroupedQueryAttention::from_config(&config).expect("valid attention");
         assert_eq!(attention.hidden_size, 4);
     }
 }
