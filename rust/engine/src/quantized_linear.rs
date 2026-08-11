@@ -105,7 +105,7 @@ mod tests {
     use crate::quantized_weights::QuantizedMatrix;
 
     fn matrix(shape: [usize; 2], values: Vec<i8>, scales: Vec<f32>) -> QuantizedMatrix {
-        QuantizedMatrix::from_parts_for_test(shape.to_vec(), values, scales)
+        QuantizedMatrix::from_parts(shape.to_vec(), values, scales).expect("valid INT8 matrix")
     }
 
     #[test]
@@ -120,11 +120,8 @@ mod tests {
     }
 
     #[test]
-    fn projection_validates_shape_and_scale_count() {
-        let bad_shape = matrix([1, 2], vec![1, 2], vec![1.0]);
-        assert!(linear_int8(&[1.0, 2.0], 1, 2, &bad_shape, 2).is_err());
-
-        let bad_scales = matrix([2, 2], vec![1, 2, 3, 4], vec![1.0]);
-        assert!(linear_int8(&[1.0, 2.0], 1, 2, &bad_scales, 2).is_err());
+    fn projection_rejects_shape_mismatch() {
+        let weight = matrix([1, 2], vec![1, 2], vec![1.0]);
+        assert!(linear_int8(&[1.0, 2.0], 1, 2, &weight, 2).is_err());
     }
 }
