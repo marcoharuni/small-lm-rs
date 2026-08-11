@@ -1,14 +1,15 @@
-//! Async-to-blocking boundary for CPU inference.
+//! Async HTTP boundary for the dedicated CPU batching runtime.
 
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use smalllm_engine::chat::{ChatMessage as EngineChatMessage, ChatRole};
-use smalllm_engine::generation::GenerationRequest;
+use smalllm_engine::chat::{format_chat_prompt, ChatMessage as EngineChatMessage, ChatRole};
 use smalllm_engine::sampler::SamplingConfig;
-use smalllm_engine::service::{GenerationService, ServiceGenerationOutput};
+use smalllm_engine::service::ServiceGenerationOutput;
+use smalllm_engine::EngineError;
 
+use crate::batch_worker::BatchRuntime;
 use crate::errors::ApiError;
 use crate::schema::{
     ChatCompletionChoice, ChatCompletionRequest, ChatCompletionResponse, ChatMessage,
@@ -19,10 +20,10 @@ const DEFAULT_MAX_TOKENS: usize = 16;
 const MAX_NEW_TOKENS: usize = 128;
 static NEXT_RESPONSE_ID: AtomicU64 = AtomicU64::new(1);
 
-/// Serialized CPU inference worker with request-isolated KV caches.
+/// Async request handle backed by one long-lived CPU batching thread.
 #[derive(Clone, Debug)]
 pub struct InferenceWorker {
-    service: Option<Arc<Mutex<GenerationService>>>,
+    runtime: Option<BatchRuntime>,
     model_name: String,
 }
 
@@ -31,25 +32,32 @@ impl InferenceWorker {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            service: None,
+            runtime: None,
             model_name: "small-lm-8m".to_owned(),
         }
     }
 
-    /// Construct a ready worker around one reusable loaded service.
-    #[must_use]
-    pub fn from_service(service: GenerationService) -> Self {
-        let model_name = service.model_config().model_name.clone();
-        Self {
-            service: Some(Arc::new(Mutex::new(service))),
+    /// Load artifacts and start a ready continuous-batching worker.
+    ///
+    /// # Errors
+    ///
+    /// Returns configuration, tokenizer, model-weight, or scheduler errors.
+    pub fn from_artifact_dir(
+        root: impl AsRef<Path>,
+        max_active_sequences: usize,
+    ) -> Result<Self, EngineError> {
+        let runtime = BatchRuntime::from_artifact_dir(root, max_active_sequences)?;
+        let model_name = runtime.model_name().to_owned();
+        Ok(Self {
+            runtime: Some(runtime),
             model_name,
-        }
+        })
     }
 
-    /// Return whether model artifacts are loaded.
+    /// Return whether model artifacts and the batch worker are loaded.
     #[must_use]
     pub fn is_ready(&self) -> bool {
-        self.service.is_some()
+        self.runtime.is_some()
     }
 
     /// Return the served model identifier.
@@ -58,14 +66,11 @@ impl InferenceWorker {
         &self.model_name
     }
 
-    /// Execute a chat-completions request.
-    ///
-    /// CPU work runs on Tokio's blocking pool. The reusable service is
-    /// serialized, and every generation call creates an independent KV cache.
+    /// Execute a chat-completions request through the shared batch scheduler.
     ///
     /// # Errors
     ///
-    /// Returns request, worker, tokenizer, cache, model, or sampling errors.
+    /// Returns request, tokenizer, scheduler, model, cache, or sampling errors.
     pub async fn complete_chat(
         &self,
         request: ChatCompletionRequest,
@@ -79,32 +84,34 @@ impl InferenceWorker {
             request.seed,
         )?;
         let messages = convert_messages(request.messages)?;
-        let service = self
-            .service
+        let runtime = self
+            .runtime
             .clone()
             .ok_or_else(|| ApiError::not_implemented("OpenAI-compatible chat completions"))?;
-
-        let output = tokio::task::spawn_blocking(move || {
-            let service = service.lock().map_err(|_| ApiError::Worker {
-                message: "generation-service mutex was poisoned".to_owned(),
-            })?;
-            service
-                .generate_chat(&messages, max_tokens, sampling)
-                .map_err(ApiError::from)
-        })
-        .await
-        .map_err(|source| ApiError::Worker {
-            message: source.to_string(),
-        })??;
+        let prompt = format_chat_prompt(&messages).map_err(ApiError::from)?;
+        let prompt_token_ids = runtime.encode(&prompt, false).map_err(ApiError::from)?;
+        let prompt_token_count = prompt_token_ids.len();
+        let generated = runtime
+            .generate(prompt_token_ids, max_tokens, sampling)
+            .await?;
+        let completion = runtime
+            .decode(&generated.generated_token_ids)
+            .map_err(ApiError::from)?;
+        let output = ServiceGenerationOutput {
+            prompt_token_count,
+            completion,
+            generated_token_ids: generated.generated_token_ids,
+            finish_reason: generated.finish_reason,
+        };
 
         Ok(build_chat_response(&self.model_name, output))
     }
 
-    /// Execute a text-completions request.
+    /// Execute a text-completions request through the shared batch scheduler.
     ///
     /// # Errors
     ///
-    /// Returns request, worker, tokenizer, cache, model, or sampling errors.
+    /// Returns request, tokenizer, scheduler, model, cache, or sampling errors.
     pub async fn complete_text(
         &self,
         request: CompletionRequest,
@@ -117,28 +124,26 @@ impl InferenceWorker {
             request.top_k,
             request.seed,
         )?;
-        let generation_request = GenerationRequest {
-            prompt: request.prompt,
-            max_new_tokens: max_tokens,
-            sampling,
-        };
-        let service = self
-            .service
+        let runtime = self
+            .runtime
             .clone()
             .ok_or_else(|| ApiError::not_implemented("OpenAI-compatible text completions"))?;
-
-        let output = tokio::task::spawn_blocking(move || {
-            let service = service.lock().map_err(|_| ApiError::Worker {
-                message: "generation-service mutex was poisoned".to_owned(),
-            })?;
-            service
-                .generate_text(&generation_request)
-                .map_err(ApiError::from)
-        })
-        .await
-        .map_err(|source| ApiError::Worker {
-            message: source.to_string(),
-        })??;
+        let prompt_token_ids = runtime
+            .encode(&request.prompt, true)
+            .map_err(ApiError::from)?;
+        let prompt_token_count = prompt_token_ids.len();
+        let generated = runtime
+            .generate(prompt_token_ids, max_tokens, sampling)
+            .await?;
+        let completion = runtime
+            .decode(&generated.generated_token_ids)
+            .map_err(ApiError::from)?;
+        let output = ServiceGenerationOutput {
+            prompt_token_count,
+            completion,
+            generated_token_ids: generated.generated_token_ids,
+            finish_reason: generated.finish_reason,
+        };
 
         Ok(build_completion_response(&self.model_name, output))
     }

@@ -85,7 +85,7 @@ def apply_rope(x: jax.Array, positions: jax.Array, theta: float) -> jax.Array:
 
 
 class GroupedQueryAttention(nnx.Module):
-    """10-query-head / 2-KV-head causal grouped-query attention."""
+    """4-query-head / 2-KV-head causal grouped-query attention."""
 
     def __init__(self, config: ModelConfig, *, rngs: nnx.Rngs):
         residual_std = 0.02 / math.sqrt(2 * config.num_layers)

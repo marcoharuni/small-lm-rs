@@ -157,8 +157,20 @@ The runtime does **not** call JAX, PyTorch, Python, or another model server. It 
 - KV-cached token-by-token decoding
 - greedy, temperature, top-k, and top-p sampling
 - multicore dense projections with Rayon
+- request-local generation sessions and KV caches
+- continuous scheduling with completion removal and capacity reuse
+- true multi-row cached decode across attention, transformer FFN, final norm, and tied LM head
+- a dedicated HTTP batching worker for concurrent requests
 
 See [`docs/ENGINE.md`](docs/ENGINE.md) and [`docs/cached_decoding.md`](docs/cached_decoding.md).
+
+### Post-submission continuous-batching milestone
+
+The `perf-roadmap` branch extends the submitted baseline with a complete continuous-batching path. Concurrent HTTP requests are admitted into one long-lived scheduler worker, every request keeps independent sampler/KV state, and decode-ready rows are evaluated together by `BatchedDecodeModel` instead of holding a whole-request model mutex.
+
+The full path is checked token-for-token against independent generation and the live HTTP smoke test completes four simultaneous chat requests. A clean 4-vCPU GitHub Actions run measured aggregate generated-token throughput rising from **33.23 tok/s at concurrency 1 to 36.51 tok/s at concurrency 8** (about **9.9%**) with **54.34 MiB** peak server RSS. Those numbers are specific to that runner and workload and are not directly comparable with the Intel i5 microbenchmark below.
+
+The current SSE adapter buffers the completed generation before formatting chunks, so this milestone does **not** claim live-streaming TTFT or TPOT. Full concurrency latency distributions and reproducibility details are in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
 
 ## JAX / Rust correctness
 
@@ -193,6 +205,12 @@ These are machine-specific measurements, not performance guarantees. Re-run them
 bash scripts/benchmark.sh
 ```
 
+Run the HTTP continuous-batching benchmark with:
+
+```bash
+python3 scripts/benchmark_concurrency.py artifacts/small-lm-8m
+```
+
 The benchmark output records the exact Git revision and whether the working tree is clean so before/after measurements remain traceable. Full checked-in results are in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
 
 ## Reproducibility and checks
@@ -211,7 +229,7 @@ The complete local verification path additionally checks artifact hashes, JAX/Ru
 bash scripts/check.sh
 ```
 
-Pull-request CI verifies the Python pipeline, artifact SHA-256 checksums, Rust formatting and Clippy, the Rust test suite, the full 81,920-logit JAX/Rust parity fixture, and a live OpenAI-compatible server smoke test.
+Pull-request CI verifies the Python pipeline, artifact SHA-256 checksums, Rust formatting and Clippy, the Rust test suite, the full 81,920-logit JAX/Rust parity fixture, and a live OpenAI-compatible server smoke test. On the `perf-roadmap` PR, the smoke test includes simultaneous requests and CI also runs the 1/2/4/8 continuous-batching benchmark.
 
 ## Layout
 
@@ -230,7 +248,7 @@ scripts/                    train/export/run/check helpers
 
 This task is deliberately small enough to understand end to end. It demonstrates the complete path from raw data and tokenizer training through model training, artifact conversion, native inference, cached autoregressive generation, API serving, numerical validation, and CPU benchmarking.
 
-It is not presented as a production-scale general-purpose assistant. Current limitations include the small parameter count, 512-token context, FP32 model storage/runtime, CPU-only execution, and limited instruction tuning. See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+It is not presented as a production-scale general-purpose assistant. Current limitations include the small parameter count, 512-token context, FP32 model storage/runtime, CPU-only execution, limited instruction tuning, per-request prefill admission, and buffered rather than live SSE token streaming. See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
 ## License
 
