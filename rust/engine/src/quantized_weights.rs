@@ -20,6 +20,45 @@ pub struct QuantizedMatrix {
 }
 
 impl QuantizedMatrix {
+    /// Construct one validated `[out_features, in_features]` INT8 matrix.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-model-weights error for a non-matrix shape, a value
+    /// count mismatch, a scale-count mismatch, or non-finite/non-positive
+    /// scales.
+    pub fn from_parts(shape: Vec<usize>, values: Vec<i8>, scales: Vec<f32>) -> Result<Self> {
+        if shape.len() != 2 {
+            return Err(EngineError::invalid_weights(format!(
+                "INT8 projection shape must have rank 2, found {shape:?}"
+            )));
+        }
+        let expected_values = element_count(&shape)?;
+        if values.len() != expected_values {
+            return Err(EngineError::invalid_weights(format!(
+                "INT8 projection contains {} values, expected {expected_values}",
+                values.len()
+            )));
+        }
+        if scales.len() != shape[0] {
+            return Err(EngineError::invalid_weights(format!(
+                "INT8 projection contains {} scales, expected {}",
+                scales.len(),
+                shape[0]
+            )));
+        }
+        if scales.iter().any(|scale| !scale.is_finite() || *scale <= 0.0) {
+            return Err(EngineError::invalid_weights(
+                "INT8 projection scales must be finite and positive",
+            ));
+        }
+        Ok(Self {
+            shape,
+            values,
+            scales,
+        })
+    }
+
     /// Return `[out_features, in_features]` dimensions.
     #[must_use]
     pub fn shape(&self) -> &[usize] {
@@ -138,19 +177,9 @@ impl QuantizedModelWeights {
                     let out_features = shape[0];
                     validate_shape(&scale_name, scale_view.shape(), &[out_features])?;
                     let scales = decode_f32(&scale_name, scale_view.shape(), scale_view.data())?;
-                    if scales.iter().any(|scale| !scale.is_finite() || *scale <= 0.0) {
-                        return Err(EngineError::invalid_weights(format!(
-                            "{scale_name} must contain finite positive scales"
-                        )));
-                    }
-
                     projections.insert(
                         name,
-                        QuantizedMatrix {
-                            shape,
-                            values,
-                            scales,
-                        },
+                        QuantizedMatrix::from_parts(shape, values, scales)?,
                     );
                 }
             }
@@ -352,8 +381,17 @@ fn decode_f32(name: &str, shape: &[usize], bytes: &[u8]) -> Result<Vec<f32>> {
 
 #[cfg(test)]
 mod tests {
-    use super::expected_layout;
+    use super::{expected_layout, QuantizedMatrix};
     use crate::config::ModelConfig;
+
+    #[test]
+    fn matrix_constructor_validates_storage_and_scales() {
+        assert!(QuantizedMatrix::from_parts(vec![2, 2], vec![1, 2, 3, 4], vec![0.1, 0.2]).is_ok());
+        assert!(QuantizedMatrix::from_parts(vec![4], vec![1, 2, 3, 4], vec![0.1]).is_err());
+        assert!(QuantizedMatrix::from_parts(vec![2, 2], vec![1, 2], vec![0.1, 0.2]).is_err());
+        assert!(QuantizedMatrix::from_parts(vec![2, 2], vec![1, 2, 3, 4], vec![0.1]).is_err());
+        assert!(QuantizedMatrix::from_parts(vec![1, 1], vec![1], vec![0.0]).is_err());
+    }
 
     #[test]
     fn canonical_layout_quantizes_only_projection_matrices() {
