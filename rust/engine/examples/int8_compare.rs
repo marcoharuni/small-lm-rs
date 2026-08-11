@@ -33,8 +33,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let prefill_metrics = compare(&fp32_logits, &int8_logits)?;
     print_metrics("prefill", prefill_metrics);
-    println!("fp32_prefill_ms={:.3}", fp32_prefill.as_secs_f64() * 1_000.0);
-    println!("int8_prefill_ms={:.3}", int8_prefill.as_secs_f64() * 1_000.0);
+    println!(
+        "fp32_prefill_ms={:.3}",
+        fp32_prefill.as_secs_f64() * 1_000.0
+    );
+    println!(
+        "int8_prefill_ms={:.3}",
+        int8_prefill.as_secs_f64() * 1_000.0
+    );
 
     let next_token = argmax(final_row(&fp32_logits, config.vocab_size)?) as u32;
     let started = Instant::now();
@@ -47,9 +53,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let decode_metrics = compare(&fp32_decode, &int8_decode)?;
     print_metrics("decode", decode_metrics);
-    println!("fp32_decode_ms={:.3}", fp32_decode_time.as_secs_f64() * 1_000.0);
-    println!("int8_decode_ms={:.3}", int8_decode_time.as_secs_f64() * 1_000.0);
-    println!("decode_top1_match={}", argmax(&fp32_decode) == argmax(&int8_decode));
+    println!(
+        "fp32_decode_ms={:.3}",
+        fp32_decode_time.as_secs_f64() * 1_000.0
+    );
+    println!(
+        "int8_decode_ms={:.3}",
+        int8_decode_time.as_secs_f64() * 1_000.0
+    );
+    println!(
+        "decode_top1_match={}",
+        argmax(&fp32_decode) == argmax(&int8_decode)
+    );
 
     Ok(())
 }
@@ -87,7 +102,11 @@ fn compare(reference: &[f32], candidate: &[f32]) -> Result<Metrics, &'static str
 
     let count = reference.len();
     let denominator = (reference_norm * candidate_norm).sqrt();
-    let cosine = if denominator > 0.0 { dot / denominator } else { 1.0 };
+    let cosine = if denominator > 0.0 {
+        dot / denominator
+    } else {
+        1.0
+    };
     Ok(Metrics {
         count,
         max_abs,
