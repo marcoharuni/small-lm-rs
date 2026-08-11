@@ -47,7 +47,10 @@ impl QuantizedMatrix {
                 shape[0]
             )));
         }
-        if scales.iter().any(|scale| !scale.is_finite() || *scale <= 0.0) {
+        if scales
+            .iter()
+            .any(|scale| !scale.is_finite() || *scale <= 0.0)
+        {
             return Err(EngineError::invalid_weights(
                 "INT8 projection scales must be finite and positive",
             ));
@@ -126,10 +129,11 @@ impl QuantizedModelWeights {
             path: path.to_path_buf(),
             source,
         })?;
-        let tensors = SafeTensors::deserialize(&bytes).map_err(|source| EngineError::SafeTensors {
-            path: path.to_path_buf(),
-            source,
-        })?;
+        let tensors =
+            SafeTensors::deserialize(&bytes).map_err(|source| EngineError::SafeTensors {
+                path: path.to_path_buf(),
+                source,
+            })?;
 
         let layout = expected_layout(config)?;
         validate_names(&tensors, &layout)?;
@@ -177,10 +181,7 @@ impl QuantizedModelWeights {
                     let out_features = shape[0];
                     validate_shape(&scale_name, scale_view.shape(), &[out_features])?;
                     let scales = decode_f32(&scale_name, scale_view.shape(), scale_view.data())?;
-                    projections.insert(
-                        name,
-                        QuantizedMatrix::from_parts(shape, values, scales)?,
-                    );
+                    projections.insert(name, QuantizedMatrix::from_parts(shape, values, scales)?);
                 }
             }
         }
@@ -358,7 +359,10 @@ fn decode_i8(name: &str, shape: &[usize], bytes: &[u8]) -> Result<Vec<i8>> {
             bytes.len()
         )));
     }
-    Ok(bytes.iter().map(|value| i8::from_le_bytes([*value])).collect())
+    Ok(bytes
+        .iter()
+        .map(|value| i8::from_le_bytes([*value]))
+        .collect())
 }
 
 fn decode_f32(name: &str, shape: &[usize], bytes: &[u8]) -> Result<Vec<f32>> {
