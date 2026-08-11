@@ -1,7 +1,7 @@
 //! Repeatable FP32/INT8 benchmark for one SmallLM prompt and cached decode step.
 
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use smalllm_engine::{DecodeBackend, ModelConfig, QuantizedDecodeModel, SmallLMModel};
@@ -116,6 +116,3 @@ fn argmax(values: &[f32]) -> usize {
         .map(|(index, _)| index)
         .unwrap_or_default()
 }
-
-#[allow(dead_code)]
-fn _assert_path(_: &Path) {}
