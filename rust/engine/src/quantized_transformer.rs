@@ -109,11 +109,15 @@ impl QuantizedTransformerBlock {
         cache: &mut KvCache,
         weights: QuantizedTransformerBlockWeights<'_>,
     ) -> Result<Vec<f32>> {
-        let normalized = self
-            .attention_norm
-            .forward_rows(hidden_states, rows, weights.attention_norm)?;
-        let attention_weights =
-            QuantizedAttentionWeights::new(weights.query, weights.key, weights.value, weights.output);
+        let normalized =
+            self.attention_norm
+                .forward_rows(hidden_states, rows, weights.attention_norm)?;
+        let attention_weights = QuantizedAttentionWeights::new(
+            weights.query,
+            weights.key,
+            weights.value,
+            weights.output,
+        );
         let attention_output = self.attention.forward_prefill_with_cache(
             &normalized,
             rows,
@@ -138,11 +142,15 @@ impl QuantizedTransformerBlock {
         cache: &mut KvCache,
         weights: QuantizedTransformerBlockWeights<'_>,
     ) -> Result<Vec<f32>> {
-        let normalized = self
-            .attention_norm
-            .forward_rows(hidden_state, 1, weights.attention_norm)?;
-        let attention_weights =
-            QuantizedAttentionWeights::new(weights.query, weights.key, weights.value, weights.output);
+        let normalized =
+            self.attention_norm
+                .forward_rows(hidden_state, 1, weights.attention_norm)?;
+        let attention_weights = QuantizedAttentionWeights::new(
+            weights.query,
+            weights.key,
+            weights.value,
+            weights.output,
+        );
         let attention_output = self.attention.forward_cached_token(
             &normalized,
             layer_index,
