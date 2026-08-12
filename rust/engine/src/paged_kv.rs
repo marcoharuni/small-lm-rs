@@ -5,7 +5,7 @@ use crate::error::{EngineError, Result};
 /// Default number of token rows stored in one KV page.
 pub const DEFAULT_KV_PAGE_TOKENS: usize = 16;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct KvPage {
     keys: Vec<f32>,
     values: Vec<f32>,
@@ -24,7 +24,7 @@ impl KvPage {
 }
 
 /// Lazily allocated fixed-size pages for one transformer's KV layer.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct PagedLayerKvCache {
     width: usize,
     max_sequence_length: usize,
