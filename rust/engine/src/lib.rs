@@ -28,6 +28,7 @@ pub mod greedy;
 pub mod kv_cache;
 pub mod linear;
 pub mod model;
+mod paged_kv;
 pub mod parity;
 pub mod quantized_attention;
 pub mod quantized_linear;
