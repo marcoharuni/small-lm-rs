@@ -135,3 +135,105 @@ cargo build --release -p smalllm-engine --example int8_benchmark
 /usr/bin/time -v target/release/examples/int8_benchmark fp32 artifacts/small-lm-8m 20
 /usr/bin/time -v target/release/examples/int8_benchmark int8 artifacts/small-lm-8m 20
 ```
+
+## Milestone 6 consolidated benchmark suite
+
+Milestone 6 unifies the individual benchmark tools behind `scripts/benchmark_suite.sh`. The measurements below were produced by GitHub Actions CI run **#253** on 12 August 2026 with the HTTP sweep enabled. The M6 branch head was `48eed87d2dc6f473164110da236997f6199f57b6`; the benchmark itself ran from GitHub's clean pull-request merge checkout `ede66969812be8ed1051cf7edcac4ac8fcc19c4a`.
+
+```text
+CPU            AMD EPYC 7763 64-Core Processor
+logical CPUs   4
+RAM            15 GiB
+OS             Linux 6.17.0-1020-azure x86_64
+Rust           1.97.1
+AVX2           true
+iterations     10
+Rayon threads  4 available logical CPUs
+```
+
+These values are machine- and workload-specific. They are a reproducible CI snapshot, not portable performance guarantees and not a replacement for the earlier Intel i5/Haswell measurements.
+
+### FP32 cached inference
+
+| Metric | 32 prompt + 32 decode | 128 prompt + 32 decode |
+| --- | ---: | ---: |
+| Model load | 31.03 ms | 30.51 ms |
+| Prefill | 251.16 ms | 1107.83 ms |
+| Prefill throughput | 127.41 tok/s | 115.54 tok/s |
+| TTFT | 251.16 ms | 1107.84 ms |
+| Decode throughput | 92.07 tok/s | 83.54 tok/s |
+| Inter-token latency | 10.86 ms/token | 11.97 ms/token |
+| Peak RSS | 65.61 MiB | 65.72 MiB |
+
+### FP32 versus AVX2-assisted INT8
+
+The suite generated the INT8 artifact from the checked FP32 weights before benchmarking. Artifact size remained **30.52 MiB FP32 versus 13.73 MiB INT8**, a **55.03% reduction**. Numerical agreement also remained unchanged: prefill cosine **0.999945633**, decode cosine **0.999976331**, and checked decode top-1 agreement `true`.
+
+| Metric | FP32 | AVX2-assisted INT8 | Change vs FP32 |
+| --- | ---: | ---: | ---: |
+| Mean 10-token prefill | 77.727 ms | 84.356 ms | +8.53% latency |
+| Mean cached decode | 11.069 ms | 10.239 ms | -7.50% latency |
+| Peak RSS | 65.70 MiB | 31.93 MiB | -51.40% |
+| Decode top-1 checksum | 2630 | 2630 | identical |
+
+On this runner, the AVX2-assisted weight-only INT8 path is slightly slower for this short prefill but slightly faster for the cached decode step while using about half the peak resident memory. This is still dequantization-assisted FP32 accumulation, not integer-only INT8×INT8 compute.
+
+### Paged KV allocation
+
+The bundled model's dense 512-token FP32 KV payload is **4 MiB per request**. With 16-token pages, physical KV payload grows only as pages are needed:
+
+| Logical sequence length | Allocated KV payload | Saving vs dense reservation |
+| ---: | ---: | ---: |
+| 0 | 0 B | 100.000% |
+| 1 | 128 KiB | 96.875% |
+| 16 | 128 KiB | 96.875% |
+| 17 | 256 KiB | 93.750% |
+| 32 | 256 KiB | 93.750% |
+| 128 | 1 MiB | 75.000% |
+| 512 | 4 MiB | 0.000% |
+
+Paging therefore removes unused-capacity reservation; it does not compress active KV state. At a fully occupied 512-token context, paged and dense payload sizes converge.
+
+### Prefix-cache reuse
+
+The prefix benchmark compares a 64-token cold prompt, an exact repeat, and a 72-token prompt that reuses the first 64 tokens. Greedy next-token outputs are checked for equality between cold and reused paths.
+
+| Workload | Mean latency | Relative to cold equivalent |
+| --- | ---: | ---: |
+| Cold 64-token prefill | 525.261 ms | 1.00× |
+| Exact 64-token prefix hit | 0.049 ms | **10,770.24× faster** |
+| Cold 72-token prefill | 597.219 ms | 1.00× |
+| 64/72-token partial prefix hit | 94.952 ms | **6.29× faster** |
+
+Both exact and partial prefix-cache paths selected the same checked greedy next token as their cold equivalents. The very large exact-hit ratio reflects that model prompt prefill is skipped entirely; the hit still clones the cached paged KV snapshot and restores the cached final logits.
+
+### HTTP concurrency after prefix caching
+
+The full suite also runs the real OpenAI-compatible server with 8 generated tokens per request, three rounds per concurrency level, and a maximum of eight active sequences. Peak server RSS was **61.92 MiB**.
+
+| Concurrent requests | Samples | Aggregate generated tok/s | Mean latency | p50 | p95 | p99 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 3 | 34.55 | 230.83 ms | 226.83 ms | 237.95 ms | 238.94 ms |
+| 2 | 6 | 54.00 | 295.78 ms | 293.21 ms | 444.86 ms | 444.92 ms |
+| 4 | 12 | 57.69 | 548.99 ms | 556.76 ms | 840.38 ms | 840.61 ms |
+| 8 | 24 | 59.57 | 1062.21 ms | 1069.55 ms | 1663.81 ms | 1663.84 ms |
+
+Within this single runner/workload, aggregate generated-token throughput rises from **34.55 tok/s at concurrency 1 to 59.57 tok/s at concurrency 8**, about **72.4% higher**. Latency still increases as four logical CPUs are shared by more requests. The prompts in this harness share substantial token prefixes, so this post-M5 result exercises both continuous batching and prefix reuse; it should not be used to isolate either optimization independently.
+
+As before, the SSE adapter buffers completed generation before formatting chunks. These HTTP values are end-to-end request latencies, not streaming TTFT/TPOT measurements.
+
+### Reproducing the consolidated suite
+
+Default suite:
+
+```bash
+bash scripts/benchmark_suite.sh artifacts/small-lm-8m
+```
+
+Include the HTTP concurrency sweep:
+
+```bash
+SMALLLM_BENCH_HTTP=1 bash scripts/benchmark_suite.sh artifacts/small-lm-8m
+```
+
+Each run writes raw outputs and machine metadata under a timestamped `benchmarks/runs/<UTC>/` directory. The M6 CI job uploads that directory as the `m6-benchmark-results` Actions artifact.
