@@ -6,22 +6,27 @@ use crate::prefix_cache::PrefixCache;
 use crate::sampler::SamplingConfig;
 use crate::session::{GenerationFinishReason, GenerationSession};
 
+/// Stable identifier assigned to one admitted generation sequence.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SequenceId(u64);
 
 impl SequenceId {
+    /// Return the numeric sequence identifier.
     #[must_use]
     pub const fn get(self) -> u64 {
         self.0
     }
 }
 
+/// Scheduler capacity controls.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SchedulerConfig {
+    /// Maximum number of simultaneously active sequences.
     pub max_active_sequences: usize,
 }
 
 impl SchedulerConfig {
+    /// Validate scheduler capacity.
     pub fn validate(self) -> Result<()> {
         if self.max_active_sequences == 0 {
             return Err(EngineError::invalid_configuration(
@@ -40,10 +45,14 @@ impl Default for SchedulerConfig {
     }
 }
 
+/// One token emitted while advancing an active sequence.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TokenEvent {
+    /// Sequence that produced the token.
     pub sequence_id: SequenceId,
+    /// Newly sampled token identifier.
     pub token_id: u32,
+    /// Terminal reason when this token completed the sequence.
     pub finish_reason: Option<GenerationFinishReason>,
 }
 
@@ -54,6 +63,7 @@ struct ActiveSequence {
     prefill_token_pending: bool,
 }
 
+/// Continuous generation scheduler with a shared reusable prompt-prefix cache.
 #[derive(Debug)]
 pub struct GenerationScheduler {
     config: SchedulerConfig,
@@ -63,6 +73,7 @@ pub struct GenerationScheduler {
 }
 
 impl GenerationScheduler {
+    /// Create an empty scheduler.
     pub fn new(config: SchedulerConfig) -> Result<Self> {
         config.validate()?;
         Ok(Self {
@@ -73,30 +84,36 @@ impl GenerationScheduler {
         })
     }
 
+    /// Return scheduler configuration.
     #[must_use]
     pub const fn config(&self) -> SchedulerConfig {
         self.config
     }
 
+    /// Return the number of active sequences.
     #[must_use]
     pub fn active_sequence_count(&self) -> usize {
         self.active.len()
     }
 
+    /// Return whether another request can be admitted.
     #[must_use]
     pub fn has_capacity(&self) -> bool {
         self.active.len() < self.config.max_active_sequences
     }
 
+    /// Return shared prompt-prefix cache statistics and state.
     #[must_use]
     pub const fn prefix_cache(&self) -> &PrefixCache {
         &self.prefix_cache
     }
 
+    /// Drop all retained prompt-prefix snapshots.
     pub fn clear_prefix_cache(&mut self) {
         self.prefix_cache.clear();
     }
 
+    /// Admit one prompt, reusing the longest cached token prefix when available.
     pub fn admit<M: DecodeBackend + ?Sized>(
         &mut self,
         model: &M,
@@ -135,6 +152,7 @@ impl GenerationScheduler {
         Ok(sequence_id)
     }
 
+    /// Emit or advance each active sequence by at most one token.
     pub fn step<M: DecodeBackend + ?Sized>(&mut self, model: &M) -> Result<Vec<TokenEvent>> {
         let mut event_slots = vec![None; self.active.len()];
         let mut decode_ready = vec![false; self.active.len()];
