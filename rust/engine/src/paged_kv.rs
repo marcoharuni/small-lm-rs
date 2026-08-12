@@ -147,6 +147,14 @@ impl PagedLayerKvCache {
         self.row(token_position, false)
     }
 
+    pub(crate) fn materialize_keys(&self) -> Result<Vec<f32>> {
+        self.materialize(true)
+    }
+
+    pub(crate) fn materialize_values(&self) -> Result<Vec<f32>> {
+        self.materialize(false)
+    }
+
     pub(crate) fn truncate(&mut self, sequence_length: usize) -> Result<()> {
         if sequence_length > self.sequence_length {
             return Err(EngineError::invalid_input(
@@ -166,6 +174,17 @@ impl PagedLayerKvCache {
     pub(crate) fn clear(&mut self) {
         self.sequence_length = 0;
         self.pages.clear();
+    }
+
+    fn materialize(&self, keys: bool) -> Result<Vec<f32>> {
+        let element_count = self.sequence_length.checked_mul(self.width).ok_or_else(|| {
+            EngineError::invalid_input("paged KV cache", "materialized size overflows usize")
+        })?;
+        let mut values = Vec::with_capacity(element_count);
+        for token_position in 0..self.sequence_length {
+            values.extend_from_slice(self.row(token_position, keys)?);
+        }
+        Ok(values)
     }
 
     fn row(&self, token_position: usize, keys: bool) -> Result<&[f32]> {
@@ -222,6 +241,14 @@ mod tests {
         assert_eq!(cache.allocated_token_capacity(), 8);
         assert_eq!(cache.key_row(4).expect("row four"), &[11.0, 12.0]);
         assert_eq!(cache.value_row(4).expect("row four"), &[19.0, 20.0]);
+        assert_eq!(
+            cache.materialize_keys().expect("materialized keys"),
+            vec![1.0, 2.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+        );
+        assert_eq!(
+            cache.materialize_values().expect("materialized values"),
+            vec![3.0, 4.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
+        );
     }
 
     #[test]
