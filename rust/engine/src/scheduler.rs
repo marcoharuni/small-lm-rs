@@ -34,7 +34,9 @@ impl SchedulerConfig {
 
 impl Default for SchedulerConfig {
     fn default() -> Self {
-        Self { max_active_sequences: 8 }
+        Self {
+            max_active_sequences: 8,
+        }
     }
 }
 
@@ -198,21 +200,29 @@ impl GenerationScheduler {
                     "generation scheduler",
                     format!(
                         "backend returned {} logits for {} requests, expected {expected_logits}",
-                        logits.len(), token_ids.len()
+                        logits.len(),
+                        token_ids.len()
                     ),
                 ));
             }
 
             let mut row_index = 0_usize;
-            for (index, (sequence, &ready)) in self.active.iter_mut().zip(&decode_ready).enumerate() {
+            for (index, (sequence, &ready)) in self.active.iter_mut().zip(&decode_ready).enumerate()
+            {
                 if !ready {
                     continue;
                 }
                 let row_start = row_index.checked_mul(vocab_size).ok_or_else(|| {
-                    EngineError::invalid_input("generation scheduler", "logit row offset overflows usize")
+                    EngineError::invalid_input(
+                        "generation scheduler",
+                        "logit row offset overflows usize",
+                    )
                 })?;
                 let row_end = row_start.checked_add(vocab_size).ok_or_else(|| {
-                    EngineError::invalid_input("generation scheduler", "logit row end overflows usize")
+                    EngineError::invalid_input(
+                        "generation scheduler",
+                        "logit row end overflows usize",
+                    )
                 })?;
                 let row = &logits[row_start..row_end];
                 let token_id = sequence.session.accept_logits(row)?;
@@ -225,7 +235,8 @@ impl GenerationScheduler {
             }
         }
 
-        self.active.retain(|sequence| !sequence.session.is_finished());
+        self.active
+            .retain(|sequence| !sequence.session.is_finished());
         Ok(event_slots.into_iter().flatten().collect())
     }
 }
@@ -242,15 +253,19 @@ mod tests {
 
     #[test]
     fn scheduler_rejects_zero_capacity() {
-        let error = GenerationScheduler::new(SchedulerConfig { max_active_sequences: 0 })
-            .expect_err("zero capacity must fail");
+        let error = GenerationScheduler::new(SchedulerConfig {
+            max_active_sequences: 0,
+        })
+        .expect_err("zero capacity must fail");
         assert!(error.to_string().contains("max_active_sequences"));
     }
 
     #[test]
     fn fresh_scheduler_reports_capacity_and_empty_prefix_cache() {
-        let scheduler = GenerationScheduler::new(SchedulerConfig { max_active_sequences: 4 })
-            .expect("valid scheduler");
+        let scheduler = GenerationScheduler::new(SchedulerConfig {
+            max_active_sequences: 4,
+        })
+        .expect("valid scheduler");
         assert_eq!(scheduler.active_sequence_count(), 0);
         assert!(scheduler.has_capacity());
         assert_eq!(scheduler.config().max_active_sequences, 4);
