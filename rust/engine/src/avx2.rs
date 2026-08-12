@@ -58,10 +58,7 @@ pub(crate) fn dot_bf16_int8(input: &[f32], values: &[i8], scale: f32) -> f32 {
         .iter()
         .zip(values)
         .fold(0.0_f32, |sum, (&input_value, &quantized)| {
-            input_value.mul_add(
-                round_to_bfloat16(f32::from(quantized) * scale),
-                sum,
-            )
+            input_value.mul_add(round_to_bfloat16(f32::from(quantized) * scale), sum)
         })
 }
 
@@ -69,8 +66,8 @@ pub(crate) fn dot_bf16_int8(input: &[f32], values: &[i8], scale: f32) -> f32 {
 #[target_feature(enable = "avx2")]
 unsafe fn dequantize_bf16_row_avx2(values: &[i8], scale: f32, output: &mut [f32]) {
     use std::arch::x86_64::{
-        __m128i, _mm_loadl_epi64, _mm256_cvtepi32_ps, _mm256_cvtepi8_epi32, _mm256_mul_ps,
-        _mm256_set1_ps, _mm256_storeu_ps,
+        __m128i, _mm256_cvtepi32_ps, _mm256_cvtepi8_epi32, _mm256_mul_ps, _mm256_set1_ps,
+        _mm256_storeu_ps, _mm_loadl_epi64,
     };
 
     let scale_vector = _mm256_set1_ps(scale);
@@ -99,8 +96,8 @@ unsafe fn dequantize_bf16_row_avx2(values: &[i8], scale: f32, output: &mut [f32]
 #[target_feature(enable = "avx2")]
 unsafe fn dot_bf16_int8_avx2(input: &[f32], values: &[i8], scale: f32) -> f32 {
     use std::arch::x86_64::{
-        __m128i, _mm_loadl_epi64, _mm256_cvtepi32_ps, _mm256_cvtepi8_epi32, _mm256_mul_ps,
-        _mm256_set1_ps, _mm256_storeu_ps,
+        __m128i, _mm256_cvtepi32_ps, _mm256_cvtepi8_epi32, _mm256_mul_ps, _mm256_set1_ps,
+        _mm256_storeu_ps, _mm_loadl_epi64,
     };
 
     let scale_vector = _mm256_set1_ps(scale);
@@ -122,10 +119,7 @@ unsafe fn dot_bf16_int8_avx2(input: &[f32], values: &[i8], scale: f32) -> f32 {
     }
 
     for tail in index..values.len() {
-        sum = input[tail].mul_add(
-            round_to_bfloat16(f32::from(values[tail]) * scale),
-            sum,
-        );
+        sum = input[tail].mul_add(round_to_bfloat16(f32::from(values[tail]) * scale), sum);
     }
     sum
 }
@@ -150,17 +144,12 @@ mod tests {
 
     #[test]
     fn dot_matches_scalar_accumulation_order() {
-        let input = [
-            1.0_f32, -2.0, 0.5, 3.0, -4.0, 0.25, 2.5, -1.5, 0.75,
-        ];
+        let input = [1.0_f32, -2.0, 0.5, 3.0, -4.0, 0.25, 2.5, -1.5, 0.75];
         let values = [-127_i8, -64, -1, 0, 1, 32, 64, 127, 11];
         let scale = 0.003_75_f32;
-        let expected = input
-            .iter()
-            .zip(values)
-            .fold(0.0_f32, |sum, (&x, q)| {
-                x.mul_add(round_to_bfloat16(f32::from(q) * scale), sum)
-            });
+        let expected = input.iter().zip(values).fold(0.0_f32, |sum, (&x, q)| {
+            x.mul_add(round_to_bfloat16(f32::from(q) * scale), sum)
+        });
         assert_eq!(dot_bf16_int8(&input, &values, scale), expected);
     }
 }
