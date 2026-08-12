@@ -177,9 +177,12 @@ impl PagedLayerKvCache {
     }
 
     fn materialize(&self, keys: bool) -> Result<Vec<f32>> {
-        let element_count = self.sequence_length.checked_mul(self.width).ok_or_else(|| {
-            EngineError::invalid_input("paged KV cache", "materialized size overflows usize")
-        })?;
+        let element_count = self
+            .sequence_length
+            .checked_mul(self.width)
+            .ok_or_else(|| {
+                EngineError::invalid_input("paged KV cache", "materialized size overflows usize")
+            })?;
         let mut values = Vec::with_capacity(element_count);
         for token_position in 0..self.sequence_length {
             values.extend_from_slice(self.row(token_position, keys)?);
