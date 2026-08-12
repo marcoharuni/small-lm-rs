@@ -66,6 +66,8 @@ capture int8_compare \
   cargo run --quiet --release -p smalllm-engine --example int8_compare -- \
   "$artifact"
 
+cargo build --quiet --release -p smalllm-engine --example int8_benchmark
+
 capture int8_fp32_timing \
   /usr/bin/time -v target/release/examples/int8_benchmark fp32 "$artifact" "$iterations"
 
