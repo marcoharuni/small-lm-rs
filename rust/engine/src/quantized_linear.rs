@@ -1,7 +1,8 @@
-//! Reference weight-only INT8 projection with FP32 accumulation.
+//! Weight-only INT8 projection with runtime-dispatched AVX2 acceleration.
 
 use rayon::prelude::*;
 
+use crate::avx2::{dequantize_bf16_row, dot_bf16_int8};
 use crate::error::{EngineError, Result};
 use crate::linear::round_to_bfloat16;
 use crate::quantized_weights::QuantizedMatrix;
@@ -13,8 +14,10 @@ use crate::tensor::{checked_matrix_len, validate_matrix};
 /// compute contract. Each quantized weight is dequantized with its output-row
 /// scale, rounded to BF16-equivalent precision, and accumulated in FP32.
 ///
-/// This is the correctness/reference path. Dedicated SIMD kernels are a later
-/// optimization and must preserve the same numerical contract.
+/// On x86_64 CPUs with AVX2, dequantization processes eight INT8 weights at a
+/// time. Multi-row prefill dequantizes each projection matrix once and reuses
+/// it across input rows. Single-row cached decode keeps an allocation-free
+/// ordered dot-product path. Other CPUs retain the scalar fallback.
 ///
 /// # Errors
 ///
@@ -75,26 +78,49 @@ pub fn linear_int8(
     let output_len = checked_matrix_len("INT8 linear output", rows, out_features)?;
     let mut output = vec![0.0_f32; output_len];
 
-    output
-        .par_iter_mut()
-        .enumerate()
-        .for_each(|(flat_index, output_value)| {
-            let row_index = flat_index / out_features;
-            let output_index = flat_index % out_features;
-            let input_start = row_index * in_features;
-            let input_row = &rounded_input[input_start..input_start + in_features];
-            let weight_start = output_index * in_features;
-            let weight_row = &weight.values()[weight_start..weight_start + in_features];
-            let scale = weight.scales()[output_index];
+    if rows > 1 {
+        let mut dequantized_weight = vec![0.0_f32; expected_weights];
+        dequantized_weight
+            .par_chunks_mut(in_features)
+            .enumerate()
+            .for_each(|(output_index, destination)| {
+                let start = output_index * in_features;
+                let source = &weight.values()[start..start + in_features];
+                dequantize_bf16_row(source, weight.scales()[output_index], destination);
+            });
 
-            *output_value = input_row.iter().zip(weight_row).fold(
-                0.0_f32,
-                |sum, (&input_value, &quantized_weight)| {
-                    let dequantized = round_to_bfloat16(f32::from(quantized_weight) * scale);
-                    input_value.mul_add(dequantized, sum)
-                },
-            );
-        });
+        output
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(flat_index, output_value)| {
+                let row_index = flat_index / out_features;
+                let output_index = flat_index % out_features;
+                let input_start = row_index * in_features;
+                let input_row = &rounded_input[input_start..input_start + in_features];
+                let weight_start = output_index * in_features;
+                let weight_row = &dequantized_weight[weight_start..weight_start + in_features];
+
+                *output_value = input_row
+                    .iter()
+                    .zip(weight_row)
+                    .fold(0.0_f32, |sum, (&input_value, &weight_value)| {
+                        input_value.mul_add(weight_value, sum)
+                    });
+            });
+    } else {
+        output
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(output_index, output_value)| {
+                let weight_start = output_index * in_features;
+                let weight_row = &weight.values()[weight_start..weight_start + in_features];
+                *output_value = dot_bf16_int8(
+                    &rounded_input[..in_features],
+                    weight_row,
+                    weight.scales()[output_index],
+                );
+            });
+    }
 
     Ok(output)
 }
@@ -102,6 +128,7 @@ pub fn linear_int8(
 #[cfg(test)]
 mod tests {
     use super::linear_int8;
+    use crate::linear::round_to_bfloat16;
     use crate::quantized_weights::QuantizedMatrix;
 
     fn matrix(shape: [usize; 2], values: Vec<i8>, scales: Vec<f32>) -> QuantizedMatrix {
@@ -121,6 +148,43 @@ mod tests {
         assert!(output.iter().all(|value| value.is_finite()));
         assert!(output[0] > 0.9 && output[0] < 1.1);
         assert!(output[1] > 1.20 && output[1] < 1.30);
+    }
+
+    #[test]
+    fn multirow_projection_matches_scalar_reference() {
+        let input = [
+            1.003_906_2_f32,
+            -0.996_093_75_f32,
+            0.503_906_25_f32,
+            1.996_093_8_f32,
+        ];
+        let values = vec![127_i8, -64, 32, 11];
+        let scales = vec![0.003_75_f32, 0.007_5_f32];
+        let weight = matrix([2, 2], values.clone(), scales.clone());
+        let actual = linear_int8(&input, 2, 2, &weight, 2).expect("valid projection");
+
+        let rounded_input = input
+            .iter()
+            .copied()
+            .map(round_to_bfloat16)
+            .collect::<Vec<_>>();
+        let mut expected = Vec::new();
+        for input_row in rounded_input.chunks_exact(2) {
+            for output_index in 0..2 {
+                let weight_row = &values[output_index * 2..output_index * 2 + 2];
+                let sum = input_row.iter().zip(weight_row).fold(
+                    0.0_f32,
+                    |sum, (&input_value, &quantized)| {
+                        input_value.mul_add(
+                            round_to_bfloat16(f32::from(quantized) * scales[output_index]),
+                            sum,
+                        )
+                    },
+                );
+                expected.push(sum);
+            }
+        }
+        assert_eq!(actual, expected);
     }
 
     #[test]

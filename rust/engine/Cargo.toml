@@ -16,5 +16,9 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokenizers.workspace = true
 
-[lints]
-workspace = true
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

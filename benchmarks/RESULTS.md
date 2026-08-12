@@ -64,7 +64,7 @@ python3 scripts/benchmark_concurrency.py artifacts/small-lm-8m
 
 ## Weight-only INT8 benchmark
 
-Milestone 2 adds symmetric per-output-channel INT8 storage for the transformer projection matrices while keeping embeddings and normalization parameters in FP32. The current `linear_int8` implementation is the correctness/reference path: it dequantizes weights during the dot product and accumulates in FP32. Dedicated SIMD/AVX2 kernels are intentionally deferred to Milestone 3.
+Milestone 2 adds symmetric per-output-channel INT8 storage for the transformer projection matrices while keeping embeddings and normalization parameters in FP32. The reference `linear_int8` implementation dequantizes weights during the dot product and accumulates in FP32.
 
 The measurements below were collected locally on an **HP EliteBook Folio 9480m** on 11 August 2026. They are machine-specific and should not be interpreted as portable speedups or slowdowns.
 
@@ -93,14 +93,33 @@ The INT8 path therefore preserves very high logit-direction agreement and select
 
 Both modes use the same ten-token prompt and one cached decode step. The benchmark warms the model once before measuring 20 iterations. Peak RSS is collected by `/usr/bin/time -v` in separate FP32 and INT8 processes.
 
-| Metric | FP32 | INT8 | Change |
+| Metric | FP32 | Milestone-2 INT8 | Change vs FP32 |
 | --- | ---: | ---: | ---: |
 | Mean prefill latency | 108.003 ms | 150.859 ms | +39.7% |
 | Mean cached-decode latency | 17.576 ms | 20.157 ms | +14.7% |
 | Peak RSS | 65.46 MiB | 31.89 MiB | -51.3% |
 | Decode top-1 checksum | 5260 | 5260 | identical |
 
-These results show the intended Milestone-2 tradeoff clearly: **weight-only INT8 cuts resident memory by about half, but the current scalar/reference dequantization path is slower than FP32 on this machine**. No INT8 speedup is claimed. Milestone 3 targets optimized quantized compute and AVX2/SIMD while preserving this correctness contract.
+These results show the Milestone-2 tradeoff clearly: **weight-only INT8 cuts resident memory by about half, but the scalar/reference dequantization path is slower than FP32 on this machine**.
+
+## AVX2-assisted INT8 benchmark
+
+Milestone 3 adds runtime AVX2 detection on x86_64, an architecture-specific AVX2 helper isolated behind a narrow unsafe boundary, and a scalar fallback for non-AVX2 CPUs. AVX2 accelerates INT8-to-FP32 scale/dequantization in eight-weight chunks. Multi-row prefill dequantizes each projection matrix once and reuses it across input rows; single-token cached decode keeps an allocation-free ordered dot-product path.
+
+The same HP EliteBook Folio 9480m reports AVX2 support with an Intel Core i5-4310U. The numerical-comparison output is unchanged from the Milestone-2 INT8 path: prefill cosine similarity is **0.999945633**, decode cosine similarity is **0.999976331**, and decode top-1 agreement remains true.
+
+### 20-run AVX2 timing and peak RSS
+
+| Metric | FP32 | Milestone-2 INT8 | Milestone-3 AVX2 INT8 |
+| --- | ---: | ---: | ---: |
+| Mean prefill latency | 108.003 ms | 150.859 ms | 104.654 ms |
+| Mean cached-decode latency | 17.576 ms | 20.157 ms | 17.025 ms |
+| Peak RSS | 65.46 MiB | 31.89 MiB | 31.72 MiB |
+| Decode top-1 checksum | 5260 | 5260 | 5260 |
+
+On this machine and workload, Milestone 3 reduces INT8 prefill latency by about **30.6%** and cached-decode latency by about **15.5%** relative to the Milestone-2 reference INT8 path. Relative to the earlier FP32 20-run baseline, AVX2 INT8 is about **3.1% lower-latency** for both prefill and cached decode while retaining roughly half the peak RSS.
+
+This should be described precisely as **AVX2-assisted weight-only INT8 execution**. Weights remain INT8 in storage; AVX2 accelerates dequantization/conversion; the ordered dot-product accumulation remains FP32. It is not VNNI-style integer-only INT8×INT8 compute.
 
 Generate the INT8 artifact and compare logits with:
 
