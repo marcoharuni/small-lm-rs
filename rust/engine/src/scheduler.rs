@@ -2,35 +2,26 @@
 
 use crate::decode_backend::DecodeBackend;
 use crate::error::{EngineError, Result};
+use crate::prefix_cache::PrefixCache;
 use crate::sampler::SamplingConfig;
 use crate::session::{GenerationFinishReason, GenerationSession};
 
-/// Stable identifier assigned to one admitted generation sequence.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SequenceId(u64);
 
 impl SequenceId {
-    /// Return the numeric sequence identifier.
     #[must_use]
     pub const fn get(self) -> u64 {
         self.0
     }
 }
 
-/// Scheduler capacity controls.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SchedulerConfig {
-    /// Maximum number of simultaneously active sequences.
     pub max_active_sequences: usize,
 }
 
 impl SchedulerConfig {
-    /// Validate scheduler capacity.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-configuration error when the active-sequence limit
-    /// is zero.
     pub fn validate(self) -> Result<()> {
         if self.max_active_sequences == 0 {
             return Err(EngineError::invalid_configuration(
@@ -43,20 +34,14 @@ impl SchedulerConfig {
 
 impl Default for SchedulerConfig {
     fn default() -> Self {
-        Self {
-            max_active_sequences: 8,
-        }
+        Self { max_active_sequences: 8 }
     }
 }
 
-/// One token emitted while advancing an active sequence.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TokenEvent {
-    /// Sequence that produced the token.
     pub sequence_id: SequenceId,
-    /// Newly sampled token identifier.
     pub token_id: u32,
-    /// Terminal reason when this token completed the sequence.
     pub finish_reason: Option<GenerationFinishReason>,
 }
 
@@ -67,62 +52,49 @@ struct ActiveSequence {
     prefill_token_pending: bool,
 }
 
-/// Request scheduler for continuously admitted generation sessions.
-///
-/// Each call to [`Self::step`] emits or advances every active sequence at most
-/// once. Decode-ready requests are collected into one backend batch while
-/// preserving independent sampler and KV-cache state for every sequence.
 #[derive(Debug)]
 pub struct GenerationScheduler {
     config: SchedulerConfig,
     active: Vec<ActiveSequence>,
     next_sequence_id: u64,
+    prefix_cache: PrefixCache,
 }
 
 impl GenerationScheduler {
-    /// Create an empty scheduler.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-configuration error for zero scheduler capacity.
     pub fn new(config: SchedulerConfig) -> Result<Self> {
         config.validate()?;
         Ok(Self {
             config,
             active: Vec::with_capacity(config.max_active_sequences),
             next_sequence_id: 1,
+            prefix_cache: PrefixCache::default(),
         })
     }
 
-    /// Return scheduler configuration.
     #[must_use]
     pub const fn config(&self) -> SchedulerConfig {
         self.config
     }
 
-    /// Return the number of active sequences.
     #[must_use]
     pub fn active_sequence_count(&self) -> usize {
         self.active.len()
     }
 
-    /// Return whether another sequence can be admitted immediately.
     #[must_use]
     pub fn has_capacity(&self) -> bool {
         self.active.len() < self.config.max_active_sequences
     }
 
-    /// Admit a prompt as a new request-local generation session.
-    ///
-    /// Prompt prefill happens during admission. The token sampled from the
-    /// final prompt logits is retained and emitted on the next scheduler step.
-    /// A future prefill scheduler can move that work into its own batching
-    /// policy without changing sequence identifiers or decode semantics.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-input error when scheduler capacity is exhausted, or
-    /// propagates model, context, cache, and sampling failures from prefill.
+    #[must_use]
+    pub const fn prefix_cache(&self) -> &PrefixCache {
+        &self.prefix_cache
+    }
+
+    pub fn clear_prefix_cache(&mut self) {
+        self.prefix_cache.clear();
+    }
+
     pub fn admit<M: DecodeBackend + ?Sized>(
         &mut self,
         model: &M,
@@ -138,12 +110,13 @@ impl GenerationScheduler {
             ));
         }
 
-        let session = GenerationSession::prefill(
+        let session = GenerationSession::prefill_with_prefix_cache(
             model,
             prompt_token_ids,
             max_new_tokens,
             eos_token_id,
             sampling,
+            &mut self.prefix_cache,
         )?;
         let sequence_id = SequenceId(self.next_sequence_id);
         self.next_sequence_id = self.next_sequence_id.checked_add(1).ok_or_else(|| {
@@ -160,16 +133,6 @@ impl GenerationScheduler {
         Ok(sequence_id)
     }
 
-    /// Emit or advance each active sequence by at most one token.
-    ///
-    /// Newly admitted sequences first emit the token sampled during prompt
-    /// prefill. All already decode-ready sequences are then evaluated through
-    /// one [`DecodeBackend::forward_cached_batch`] call. Finished sequences are
-    /// removed after their terminal token has been reported.
-    ///
-    /// # Errors
-    ///
-    /// Propagates backend, cache, batch-shape, or sampling failures.
     pub fn step<M: DecodeBackend + ?Sized>(&mut self, model: &M) -> Result<Vec<TokenEvent>> {
         let mut event_slots = vec![None; self.active.len()];
         let mut decode_ready = vec![false; self.active.len()];
@@ -235,29 +198,21 @@ impl GenerationScheduler {
                     "generation scheduler",
                     format!(
                         "backend returned {} logits for {} requests, expected {expected_logits}",
-                        logits.len(),
-                        token_ids.len()
+                        logits.len(), token_ids.len()
                     ),
                 ));
             }
 
             let mut row_index = 0_usize;
-            for (index, (sequence, &ready)) in self.active.iter_mut().zip(&decode_ready).enumerate()
-            {
+            for (index, (sequence, &ready)) in self.active.iter_mut().zip(&decode_ready).enumerate() {
                 if !ready {
                     continue;
                 }
                 let row_start = row_index.checked_mul(vocab_size).ok_or_else(|| {
-                    EngineError::invalid_input(
-                        "generation scheduler",
-                        "logit row offset overflows usize",
-                    )
+                    EngineError::invalid_input("generation scheduler", "logit row offset overflows usize")
                 })?;
                 let row_end = row_start.checked_add(vocab_size).ok_or_else(|| {
-                    EngineError::invalid_input(
-                        "generation scheduler",
-                        "logit row end overflows usize",
-                    )
+                    EngineError::invalid_input("generation scheduler", "logit row end overflows usize")
                 })?;
                 let row = &logits[row_start..row_end];
                 let token_id = sequence.session.accept_logits(row)?;
@@ -270,8 +225,7 @@ impl GenerationScheduler {
             }
         }
 
-        self.active
-            .retain(|sequence| !sequence.session.is_finished());
+        self.active.retain(|sequence| !sequence.session.is_finished());
         Ok(event_slots.into_iter().flatten().collect())
     }
 }
@@ -288,22 +242,19 @@ mod tests {
 
     #[test]
     fn scheduler_rejects_zero_capacity() {
-        let error = GenerationScheduler::new(SchedulerConfig {
-            max_active_sequences: 0,
-        })
-        .expect_err("zero capacity must fail");
+        let error = GenerationScheduler::new(SchedulerConfig { max_active_sequences: 0 })
+            .expect_err("zero capacity must fail");
         assert!(error.to_string().contains("max_active_sequences"));
     }
 
     #[test]
-    fn fresh_scheduler_reports_capacity() {
-        let scheduler = GenerationScheduler::new(SchedulerConfig {
-            max_active_sequences: 4,
-        })
-        .expect("valid scheduler");
+    fn fresh_scheduler_reports_capacity_and_empty_prefix_cache() {
+        let scheduler = GenerationScheduler::new(SchedulerConfig { max_active_sequences: 4 })
+            .expect("valid scheduler");
         assert_eq!(scheduler.active_sequence_count(), 0);
         assert!(scheduler.has_capacity());
         assert_eq!(scheduler.config().max_active_sequences, 4);
+        assert!(scheduler.prefix_cache().is_empty());
     }
 
     #[test]
