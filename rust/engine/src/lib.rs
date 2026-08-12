@@ -10,9 +10,10 @@
 //! sampling, token-stepped generation sessions, continuous scheduling, and
 //! full-model batched cached decode for independent request state.
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 pub mod attention;
+mod avx2;
 pub mod batched_attention;
 pub mod batched_model;
 pub mod batched_transformer;
