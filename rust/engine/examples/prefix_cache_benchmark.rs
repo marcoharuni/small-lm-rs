@@ -27,10 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = ModelConfig::from_json_path(artifact_dir.join("config.json"))?;
     let base_prompt = prompt_tokens(BASE_PROMPT_TOKENS, config.vocab_size);
-    let extended_prompt = prompt_tokens(
-        BASE_PROMPT_TOKENS + EXTENSION_TOKENS,
-        config.vocab_size,
-    );
+    let extended_prompt = prompt_tokens(BASE_PROMPT_TOKENS + EXTENSION_TOKENS, config.vocab_size);
 
     let mut model = SmallLMModel::from_config(config)?;
     model.load_weights(artifact_dir.join("model.safetensors"))?;
