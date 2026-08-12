@@ -5,7 +5,7 @@
 //! projection, RMSNorm, SiTU-GLU, stable softmax, interleaved RoPE, complete
 //! causal grouped-query attention, transformer blocks, and complete uncached
 //! full-model prefill logits, JAX reference parity, uncached greedy decoding,
-//! dense per-layer KV storage, cache-populating prompt prefill, full-model
+//! paged per-layer KV storage, cache-populating prompt prefill, full-model
 //! cached decoding, deterministic greedy generation, temperature/top-k/top-p
 //! sampling, token-stepped generation sessions, continuous scheduling, and
 //! full-model batched cached decode for independent request state.
@@ -54,6 +54,7 @@ pub use config::ModelConfig;
 pub use decode_backend::DecodeBackend;
 pub use error::{EngineError, Result};
 pub use generation_config::GenerationConfig;
+pub use kv_cache::{KvCache, KvCacheConfig};
 pub use model::SmallLMModel;
 pub use quantized_attention::{QuantizedAttentionWeights, QuantizedGroupedQueryAttention};
 pub use quantized_linear::linear_int8;
