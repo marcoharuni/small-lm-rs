@@ -2,6 +2,7 @@
 
 use crate::config::ModelConfig;
 use crate::error::{EngineError, Result};
+use crate::paged_kv::{PagedLayerKvCache, DEFAULT_KV_PAGE_TOKENS};
 use crate::tensor::validate_matrix;
 
 /// Dimensions required to allocate a generation key/value cache.
@@ -63,36 +64,19 @@ impl KvCacheConfig {
     }
 }
 
-#[derive(Debug)]
-struct LayerKvCache {
-    keys: Vec<f32>,
-    values: Vec<f32>,
-    sequence_length: usize,
-}
-
-impl LayerKvCache {
-    fn new(capacity: usize) -> Self {
-        Self {
-            keys: vec![0.0; capacity],
-            values: vec![0.0; capacity],
-            sequence_length: 0,
-        }
-    }
-}
-
-/// Engine-owned, dense per-layer key/value tensors for autoregressive decoding.
+/// Engine-owned paged per-layer key/value tensors for autoregressive decoding.
 ///
-/// Each layer stores row-major `[max_sequence_length, kv_heads, head_dim]`
-/// keys and values. Only the prefix indicated by that layer's sequence length
-/// is initialized and visible through the public accessors.
+/// Storage is allocated lazily in fixed-size token pages. Cached attention
+/// addresses logical token positions directly through page-native head accessors,
+/// so unused context capacity does not reserve dense key/value buffers.
 #[derive(Debug)]
 pub struct KvCache {
     config: KvCacheConfig,
-    layers: Vec<LayerKvCache>,
+    layers: Vec<PagedLayerKvCache>,
 }
 
 impl KvCache {
-    /// Allocate zero-initialized storage for every configured layer.
+    /// Create an empty cache whose per-layer pages are allocated on demand.
     ///
     /// # Errors
     ///
@@ -101,16 +85,13 @@ impl KvCache {
     pub fn allocate(config: KvCacheConfig) -> Result<Self> {
         config.validate()?;
         let width = config.key_value_width()?;
-        let layer_capacity = config
-            .max_sequence_length
-            .checked_mul(width)
-            .ok_or_else(|| {
-                EngineError::invalid_configuration("KV-cache layer size overflows usize")
-            })?;
-
         let mut layers = Vec::with_capacity(config.num_layers);
         for _ in 0..config.num_layers {
-            layers.push(LayerKvCache::new(layer_capacity));
+            layers.push(PagedLayerKvCache::new(
+                width,
+                config.max_sequence_length,
+                DEFAULT_KV_PAGE_TOKENS,
+            )?);
         }
         Ok(Self { config, layers })
     }
@@ -121,6 +102,30 @@ impl KvCache {
         &self.config
     }
 
+    /// Return the fixed number of token positions represented by one KV page.
+    #[must_use]
+    pub const fn page_tokens(&self) -> usize {
+        DEFAULT_KV_PAGE_TOKENS
+    }
+
+    /// Return the total number of currently allocated pages across all layers.
+    #[must_use]
+    pub fn allocated_pages(&self) -> usize {
+        self.layers
+            .iter()
+            .map(PagedLayerKvCache::allocated_pages)
+            .sum()
+    }
+
+    /// Return total allocated token capacity summed across all layers.
+    #[must_use]
+    pub fn allocated_token_capacity(&self) -> usize {
+        self.layers
+            .iter()
+            .map(PagedLayerKvCache::allocated_token_capacity)
+            .sum()
+    }
+
     /// Return the number of token positions completed across every layer.
     ///
     /// During an in-progress multi-layer forward pass, this is the minimum
@@ -129,7 +134,7 @@ impl KvCache {
     pub fn sequence_length(&self) -> usize {
         self.layers
             .iter()
-            .map(|layer| layer.sequence_length)
+            .map(PagedLayerKvCache::sequence_length)
             .min()
             .unwrap_or_default()
     }
@@ -137,7 +142,9 @@ impl KvCache {
     /// Return whether every layer currently contains zero token positions.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.layers.iter().all(|layer| layer.sequence_length == 0)
+        self.layers
+            .iter()
+            .all(|layer| layer.sequence_length() == 0)
     }
 
     /// Return whether every layer currently has the same sequence length.
@@ -146,7 +153,7 @@ impl KvCache {
         let expected = self.sequence_length();
         self.layers
             .iter()
-            .all(|layer| layer.sequence_length == expected)
+            .all(|layer| layer.sequence_length() == expected)
     }
 
     /// Return the number of cached positions in one layer.
@@ -157,7 +164,7 @@ impl KvCache {
     pub fn layer_sequence_length(&self, layer_index: usize) -> Result<usize> {
         self.layers
             .get(layer_index)
-            .map(|layer| layer.sequence_length)
+            .map(PagedLayerKvCache::sequence_length)
             .ok_or_else(|| {
                 EngineError::invalid_input(
                     "KV cache",
@@ -196,26 +203,6 @@ impl KvCache {
             ));
         }
 
-        let current_length = self.layer_sequence_length(layer_index)?;
-        let new_length = current_length.checked_add(token_count).ok_or_else(|| {
-            EngineError::invalid_input("KV cache", "sequence length overflows usize")
-        })?;
-        if new_length > self.config.max_sequence_length {
-            return Err(EngineError::invalid_input(
-                "KV cache",
-                format!(
-                    "layer {layer_index} would grow to {new_length} tokens, exceeding capacity {}",
-                    self.config.max_sequence_length
-                ),
-            ));
-        }
-
-        let start = current_length.checked_mul(width).ok_or_else(|| {
-            EngineError::invalid_input("KV cache", "append offset overflows usize")
-        })?;
-        let end = new_length
-            .checked_mul(width)
-            .ok_or_else(|| EngineError::invalid_input("KV cache", "append end overflows usize"))?;
         let layer_count = self.layers.len();
         let layer = self.layers.get_mut(layer_index).ok_or_else(|| {
             EngineError::invalid_input(
@@ -223,28 +210,31 @@ impl KvCache {
                 format!("layer index {layer_index} is outside 0..{layer_count}"),
             )
         })?;
-        layer.keys[start..end].copy_from_slice(keys);
-        layer.values[start..end].copy_from_slice(values);
-        layer.sequence_length = new_length;
-        Ok(())
+        layer.append(keys, values, token_count)
     }
 
-    /// Return the initialized key prefix for one layer.
+    /// Materialize the initialized key prefix for one layer.
+    ///
+    /// This diagnostic compatibility accessor returns an owned contiguous
+    /// snapshot because the authoritative cache storage is paged.
     ///
     /// # Errors
     ///
     /// Returns an invalid-input error when the layer index is out of range.
-    pub fn layer_keys(&self, layer_index: usize) -> Result<&[f32]> {
-        self.layer_values_prefix(layer_index, true)
+    pub fn layer_keys(&self, layer_index: usize) -> Result<Vec<f32>> {
+        self.layer(layer_index)?.materialize_keys()
     }
 
-    /// Return the initialized value prefix for one layer.
+    /// Materialize the initialized value prefix for one layer.
+    ///
+    /// This diagnostic compatibility accessor returns an owned contiguous
+    /// snapshot because the authoritative cache storage is paged.
     ///
     /// # Errors
     ///
     /// Returns an invalid-input error when the layer index is out of range.
-    pub fn layer_values(&self, layer_index: usize) -> Result<&[f32]> {
-        self.layer_values_prefix(layer_index, false)
+    pub fn layer_values(&self, layer_index: usize) -> Result<Vec<f32>> {
+        self.layer(layer_index)?.materialize_values()
     }
 
     /// Return one key head at one cached token position.
@@ -286,16 +276,16 @@ impl KvCache {
         let used = self
             .layers
             .iter()
-            .map(|layer| layer.sequence_length)
+            .map(PagedLayerKvCache::sequence_length)
             .max()
             .unwrap_or_default();
         self.config.max_sequence_length.saturating_sub(used)
     }
 
-    /// Clear all logical sequence state while retaining allocated storage.
+    /// Clear all logical sequence state and release every allocated page.
     pub fn clear(&mut self) {
         for layer in &mut self.layers {
-            layer.sequence_length = 0;
+            layer.clear();
         }
     }
 
@@ -304,7 +294,7 @@ impl KvCache {
             .layers
             .iter()
             .enumerate()
-            .map(|(index, layer)| (index, layer.sequence_length))
+            .map(|(index, layer)| (index, layer.sequence_length()))
             .find(|(_, current_length)| *current_length < sequence_length)
         {
             return Err(EngineError::invalid_input(
@@ -315,7 +305,7 @@ impl KvCache {
             ));
         }
         for layer in &mut self.layers {
-            layer.sequence_length = sequence_length;
+            layer.truncate(sequence_length)?;
         }
         Ok(())
     }
@@ -325,15 +315,6 @@ impl KvCache {
         layer_index: usize,
         sequence_length: usize,
     ) -> Result<()> {
-        let current_length = self.layer_sequence_length(layer_index)?;
-        if sequence_length > current_length {
-            return Err(EngineError::invalid_input(
-                "KV cache",
-                format!(
-                    "cannot extend layer {layer_index} from {current_length} to {sequence_length} while truncating"
-                ),
-            ));
-        }
         let layer_count = self.layers.len();
         let layer = self.layers.get_mut(layer_index).ok_or_else(|| {
             EngineError::invalid_input(
@@ -341,12 +322,11 @@ impl KvCache {
                 format!("layer index {layer_index} is outside 0..{layer_count}"),
             )
         })?;
-        layer.sequence_length = sequence_length;
-        Ok(())
+        layer.truncate(sequence_length)
     }
 
-    fn layer_values_prefix(&self, layer_index: usize, keys: bool) -> Result<&[f32]> {
-        let layer = self.layers.get(layer_index).ok_or_else(|| {
+    fn layer(&self, layer_index: usize) -> Result<&PagedLayerKvCache> {
+        self.layers.get(layer_index).ok_or_else(|| {
             EngineError::invalid_input(
                 "KV cache",
                 format!(
@@ -354,13 +334,7 @@ impl KvCache {
                     self.layers.len()
                 ),
             )
-        })?;
-        let width = self.config.key_value_width()?;
-        let initialized = layer.sequence_length.checked_mul(width).ok_or_else(|| {
-            EngineError::invalid_input("KV cache", "initialized prefix overflows usize")
-        })?;
-        let storage = if keys { &layer.keys } else { &layer.values };
-        Ok(&storage[..initialized])
+        })
     }
 
     fn head_slice(
@@ -370,13 +344,6 @@ impl KvCache {
         key_value_head: usize,
         keys: bool,
     ) -> Result<&[f32]> {
-        let sequence_length = self.layer_sequence_length(layer_index)?;
-        if token_position >= sequence_length {
-            return Err(EngineError::invalid_input(
-                "KV cache",
-                format!("token position {token_position} is outside 0..{sequence_length}"),
-            ));
-        }
         if key_value_head >= self.config.num_key_value_heads {
             return Err(EngineError::invalid_input(
                 "KV cache",
@@ -387,25 +354,18 @@ impl KvCache {
             ));
         }
 
-        let width = self.config.key_value_width()?;
-        let token_offset = token_position.checked_mul(width).ok_or_else(|| {
-            EngineError::invalid_input("KV cache", "token offset overflows usize")
-        })?;
+        let row = if keys {
+            self.layer(layer_index)?.key_row(token_position)?
+        } else {
+            self.layer(layer_index)?.value_row(token_position)?
+        };
         let head_offset = key_value_head
             .checked_mul(self.config.head_dimension)
             .ok_or_else(|| EngineError::invalid_input("KV cache", "head offset overflows usize"))?;
-        let start = token_offset
-            .checked_add(head_offset)
-            .ok_or_else(|| EngineError::invalid_input("KV cache", "head start overflows usize"))?;
-        let end = start
+        let end = head_offset
             .checked_add(self.config.head_dimension)
             .ok_or_else(|| EngineError::invalid_input("KV cache", "head end overflows usize"))?;
-        let storage = if keys {
-            self.layer_keys(layer_index)?
-        } else {
-            self.layer_values(layer_index)?
-        };
-        storage.get(start..end).ok_or_else(|| {
+        row.get(head_offset..end).ok_or_else(|| {
             EngineError::invalid_input("KV cache", "cached head storage is truncated")
         })
     }
@@ -444,13 +404,15 @@ mod tests {
     }
 
     #[test]
-    fn allocates_dense_storage_for_every_layer() {
+    fn starts_without_allocating_kv_pages() {
         let config = KvCacheConfig::from_model(&tiny_model_config(), 4).expect("valid cache");
         let cache = KvCache::allocate(config).expect("allocated cache");
         assert_eq!(cache.config(), &config);
         assert_eq!(cache.sequence_length(), 0);
         assert!(cache.is_empty());
         assert!(cache.is_synchronized());
+        assert_eq!(cache.allocated_pages(), 0);
+        assert_eq!(cache.allocated_token_capacity(), 0);
         assert!(cache.layer_keys(0).expect("layer zero").is_empty());
         assert!(cache.layer_values(1).expect("layer one").is_empty());
     }
@@ -466,8 +428,14 @@ mod tests {
         assert_eq!(cache.layer_sequence_length(0).expect("layer length"), 2);
         assert_eq!(cache.layer_sequence_length(1).expect("layer length"), 0);
         assert!(!cache.is_synchronized());
+        assert_eq!(cache.allocated_pages(), 1);
+        assert_eq!(cache.allocated_token_capacity(), 4);
         assert_eq!(cache.key_head(0, 1, 0).expect("second key"), &[3.0, 4.0]);
         assert_eq!(cache.value_head(0, 0, 0).expect("first value"), &[5.0, 6.0]);
+        assert_eq!(
+            cache.layer_keys(0).expect("materialized keys"),
+            vec![1.0, 2.0, 3.0, 4.0]
+        );
     }
 
     #[test]
@@ -502,15 +470,17 @@ mod tests {
                 .append_layer(layer, &[1.0, 2.0, 3.0, 4.0], &[5.0, 6.0, 7.0, 8.0], 2)
                 .expect("valid append");
         }
+        assert_eq!(cache.allocated_pages(), 2);
         cache.truncate_all(1).expect("valid rollback");
         assert!(cache.is_synchronized());
         assert_eq!(cache.sequence_length(), 1);
+        assert_eq!(cache.allocated_pages(), 2);
         assert!(cache.truncate_all(2).is_err());
         assert_eq!(cache.sequence_length(), 1);
     }
 
     #[test]
-    fn clear_retains_storage_and_resets_all_lengths() {
+    fn clear_releases_pages_and_resets_all_lengths() {
         let config = KvCacheConfig::from_model(&tiny_model_config(), 4).expect("valid cache");
         let mut cache = KvCache::allocate(config).expect("allocated cache");
         for layer in 0..config.num_layers {
@@ -520,8 +490,10 @@ mod tests {
         }
         assert_eq!(cache.sequence_length(), 1);
         assert!(cache.is_synchronized());
+        assert_eq!(cache.allocated_pages(), 2);
         cache.clear();
         assert!(cache.is_empty());
         assert!(cache.is_synchronized());
+        assert_eq!(cache.allocated_pages(), 0);
     }
 }
