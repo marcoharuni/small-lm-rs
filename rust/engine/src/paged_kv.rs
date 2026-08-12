@@ -59,7 +59,7 @@ impl PagedLayerKvCache {
     }
 
     #[must_use]
-    pub(crate) const fn allocated_pages(&self) -> usize {
+    pub(crate) fn allocated_pages(&self) -> usize {
         self.pages.len()
     }
 
@@ -71,7 +71,12 @@ impl PagedLayerKvCache {
             .min(self.max_sequence_length)
     }
 
-    pub(crate) fn append(&mut self, keys: &[f32], values: &[f32], token_count: usize) -> Result<()> {
+    pub(crate) fn append(
+        &mut self,
+        keys: &[f32],
+        values: &[f32],
+        token_count: usize,
+    ) -> Result<()> {
         let expected = token_count.checked_mul(self.width).ok_or_else(|| {
             EngineError::invalid_input("paged KV cache", "append shape overflows usize")
         })?;
@@ -92,9 +97,12 @@ impl PagedLayerKvCache {
             ));
         }
 
-        let new_length = self.sequence_length.checked_add(token_count).ok_or_else(|| {
-            EngineError::invalid_input("paged KV cache", "sequence length overflows usize")
-        })?;
+        let new_length = self
+            .sequence_length
+            .checked_add(token_count)
+            .ok_or_else(|| {
+                EngineError::invalid_input("paged KV cache", "sequence length overflows usize")
+            })?;
         if new_length > self.max_sequence_length {
             return Err(EngineError::invalid_input(
                 "paged KV cache",
@@ -220,7 +228,11 @@ mod tests {
     fn truncate_releases_trailing_pages() {
         let mut cache = PagedLayerKvCache::new(1, 16, 4).expect("valid cache");
         cache
-            .append(&[1.0, 2.0, 3.0, 4.0, 5.0], &[6.0, 7.0, 8.0, 9.0, 10.0], 5)
+            .append(
+                &[1.0, 2.0, 3.0, 4.0, 5.0],
+                &[6.0, 7.0, 8.0, 9.0, 10.0],
+                5,
+            )
             .expect("append");
         assert_eq!(cache.allocated_pages(), 2);
 
