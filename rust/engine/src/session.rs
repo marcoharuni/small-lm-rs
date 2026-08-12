@@ -3,19 +3,16 @@
 use crate::decode_backend::DecodeBackend;
 use crate::error::{EngineError, Result};
 use crate::kv_cache::KvCache;
+use crate::prefix_cache::PrefixCache;
 use crate::sampler::{Sampler, SamplingConfig};
 
-/// Terminal reason for one generation session.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GenerationFinishReason {
-    /// The configured end-of-sequence token was sampled.
     Eos,
-    /// The requested new-token budget was exhausted.
     Length,
 }
 
 impl GenerationFinishReason {
-    /// Return the wire-compatible finish-reason string.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -25,11 +22,6 @@ impl GenerationFinishReason {
     }
 }
 
-/// Request-local state that can advance one decode token at a time.
-///
-/// A session owns its KV cache and sampler. The model remains shared and
-/// immutable, which lets a scheduler interleave independent sessions without
-/// mixing request state.
 #[derive(Debug)]
 pub struct GenerationSession {
     cache: KvCache,
@@ -42,14 +34,6 @@ pub struct GenerationSession {
 }
 
 impl GenerationSession {
-    /// Prefill one prompt and create a decode-ready session.
-    ///
-    /// Prefill also samples the first generated token from the final prompt
-    /// logits. Further tokens are produced by calling [`Self::advance`].
-    ///
-    /// # Errors
-    ///
-    /// Returns input, context, model, cache, or sampling errors.
     pub fn prefill<M: DecodeBackend + ?Sized>(
         model: &M,
         prompt_token_ids: &[u32],
@@ -57,17 +41,55 @@ impl GenerationSession {
         eos_token_id: Option<u32>,
         sampling: SamplingConfig,
     ) -> Result<Self> {
-        let requested_length =
-            validate_generation_inputs(model, prompt_token_ids, max_new_tokens, eos_token_id)?;
-        let mut sampler = Sampler::new(sampling)?;
-        let mut cache = model.allocate_kv_cache(requested_length)?;
-        let prefill_logits = model.forward_prefill_with_cache(prompt_token_ids, &mut cache)?;
-        let first_token = sampler.sample(final_logits(
-            &prefill_logits,
-            prompt_token_ids.len(),
-            model.config().vocab_size,
-        )?)?;
+        let mut prefix_cache = PrefixCache::default();
+        Self::prefill_with_prefix_cache(
+            model,
+            prompt_token_ids,
+            max_new_tokens,
+            eos_token_id,
+            sampling,
+            &mut prefix_cache,
+        )
+    }
 
+    /// Prefill using the longest reusable prompt prefix retained in `prefix_cache`.
+    pub fn prefill_with_prefix_cache<M: DecodeBackend + ?Sized>(
+        model: &M,
+        prompt_token_ids: &[u32],
+        max_new_tokens: usize,
+        eos_token_id: Option<u32>,
+        sampling: SamplingConfig,
+        prefix_cache: &mut PrefixCache,
+    ) -> Result<Self> {
+        validate_generation_inputs(model, prompt_token_ids, max_new_tokens, eos_token_id)?;
+        let mut sampler = Sampler::new(sampling)?;
+        let vocab_size = model.config().vocab_size;
+
+        let (mut cache, mut final_row, matched_tokens) = match prefix_cache.lookup(prompt_token_ids) {
+            Some(hit) => (hit.cache, hit.final_logits, hit.matched_tokens),
+            None => {
+                let mut cache = model.allocate_kv_cache(model.config().context_length)?;
+                let logits = model.forward_prefill_with_cache(prompt_token_ids, &mut cache)?;
+                let row = final_logits(&logits, prompt_token_ids.len(), vocab_size)?.to_vec();
+                prefix_cache.insert(prompt_token_ids, &cache, &row);
+                (cache, row, prompt_token_ids.len())
+            }
+        };
+
+        if matched_tokens < prompt_token_ids.len() {
+            for &token_id in &prompt_token_ids[matched_tokens..] {
+                final_row = model.forward_cached_token(token_id, &mut cache)?;
+            }
+            prefix_cache.insert(prompt_token_ids, &cache, &final_row);
+        }
+
+        if final_row.len() != vocab_size {
+            return Err(EngineError::invalid_input(
+                "prefix cache",
+                "cached final-logit row has the wrong vocabulary width",
+            ));
+        }
+        let first_token = sampler.sample(&final_row)?;
         let finish_reason = if eos_token_id == Some(first_token) {
             Some(GenerationFinishReason::Eos)
         } else if max_new_tokens == 1 {
@@ -88,31 +110,26 @@ impl GenerationSession {
         })
     }
 
-    /// Return whether no additional decode step is required.
     #[must_use]
     pub const fn is_finished(&self) -> bool {
         self.finish_reason.is_some()
     }
 
-    /// Return the current terminal reason, when generation has finished.
     #[must_use]
     pub const fn finish_reason(&self) -> Option<GenerationFinishReason> {
         self.finish_reason
     }
 
-    /// Return all tokens generated so far.
     #[must_use]
     pub fn generated_token_ids(&self) -> &[u32] {
         &self.generated_token_ids
     }
 
-    /// Return the token that will be consumed by the next cached decode step.
     #[must_use]
     pub const fn next_input_token(&self) -> Option<u32> {
         self.next_input_token
     }
 
-    /// Return the number of prompt/generated input positions currently cached.
     #[must_use]
     pub fn cached_sequence_length(&self) -> usize {
         self.cache.sequence_length()
@@ -144,10 +161,8 @@ impl GenerationSession {
                 "cannot accept logits for a finished session",
             ));
         }
-
         let next_token = self.sampler.sample(logits)?;
         self.generated_token_ids.push(next_token);
-
         if self.eos_token_id == Some(next_token) {
             self.finish_reason = Some(GenerationFinishReason::Eos);
             self.next_input_token = None;
@@ -160,25 +175,12 @@ impl GenerationSession {
         Ok(next_token)
     }
 
-    /// Advance this session by exactly one cached decode step.
-    ///
-    /// The returned token is appended to [`Self::generated_token_ids`].
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-input error when called after completion, or
-    /// propagates model, cache, and sampling errors.
     pub fn advance<M: DecodeBackend + ?Sized>(&mut self, model: &M) -> Result<u32> {
         let input_token = self.pending_decode_token()?;
         let logits = model.forward_cached_token(input_token, &mut self.cache)?;
         self.accept_logits(&logits)
     }
 
-    /// Consume a completed session into generated tokens and finish reason.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-input error if generation is still running.
     pub fn into_parts(self) -> Result<(Vec<u32>, GenerationFinishReason)> {
         let finish_reason = self.finish_reason.ok_or_else(|| {
             EngineError::invalid_input(
@@ -197,39 +199,23 @@ fn validate_generation_inputs<M: DecodeBackend + ?Sized>(
     eos_token_id: Option<u32>,
 ) -> Result<usize> {
     if prompt_token_ids.is_empty() {
-        return Err(EngineError::invalid_input(
-            "generation",
-            "the tokenized prompt must not be empty",
-        ));
+        return Err(EngineError::invalid_input("generation", "the tokenized prompt must not be empty"));
     }
     if max_new_tokens == 0 {
-        return Err(EngineError::invalid_input(
-            "generation",
-            "max_new_tokens must be greater than zero",
-        ));
+        return Err(EngineError::invalid_input("generation", "max_new_tokens must be greater than zero"));
     }
     if let Some(eos_token_id) = eos_token_id {
         if eos_token_id as usize >= model.config().vocab_size {
-            return Err(EngineError::invalid_input(
-                "generation",
-                "EOS token is outside the model vocabulary",
-            ));
+            return Err(EngineError::invalid_input("generation", "EOS token is outside the model vocabulary"));
         }
     }
-
-    let requested_length = prompt_token_ids
-        .len()
-        .checked_add(max_new_tokens)
-        .ok_or_else(|| {
-            EngineError::invalid_input("generation", "requested length overflows usize")
-        })?;
+    let requested_length = prompt_token_ids.len().checked_add(max_new_tokens).ok_or_else(|| {
+        EngineError::invalid_input("generation", "requested length overflows usize")
+    })?;
     if requested_length > model.config().context_length {
         return Err(EngineError::invalid_input(
             "generation",
-            format!(
-                "requested length {requested_length} exceeds context length {}",
-                model.config().context_length
-            ),
+            format!("requested length {requested_length} exceeds context length {}", model.config().context_length),
         ));
     }
     Ok(requested_length)
@@ -242,10 +228,7 @@ fn final_logits(logits: &[f32], sequence_length: usize, vocab_size: usize) -> Re
     if logits.len() != expected {
         return Err(EngineError::invalid_input(
             "generation",
-            format!(
-                "model returned {} logits, expected {expected}",
-                logits.len()
-            ),
+            format!("model returned {} logits, expected {expected}", logits.len()),
         ));
     }
     Ok(&logits[expected - vocab_size..])
@@ -259,28 +242,14 @@ mod tests {
 
     fn tiny_model() -> SmallLMModel {
         let config = ModelConfig {
-            model_name: "tiny".to_owned(),
-            architecture: "decoder-only-transformer".to_owned(),
-            normalization: "RMSNorm".to_owned(),
-            position_encoding: "RoPE".to_owned(),
-            activation: "SiTU-GLU".to_owned(),
-            weight_layout: "out_features,in_features".to_owned(),
-            vocab_size: 8,
-            context_length: 8,
-            num_layers: 2,
-            hidden_size: 4,
-            intermediate_size: 4,
-            num_query_heads: 2,
-            num_key_value_heads: 1,
-            head_dimension: 2,
-            rms_norm_epsilon: 1.0e-5,
-            rope_theta: 10_000.0,
-            situ_beta_gate: 4.0,
-            situ_beta_up: 25.0,
-            tie_word_embeddings: true,
-            use_bias: false,
-            dropout: 0.0,
-            expected_parameter_count: 244,
+            model_name: "tiny".to_owned(), architecture: "decoder-only-transformer".to_owned(),
+            normalization: "RMSNorm".to_owned(), position_encoding: "RoPE".to_owned(),
+            activation: "SiTU-GLU".to_owned(), weight_layout: "out_features,in_features".to_owned(),
+            vocab_size: 8, context_length: 8, num_layers: 2, hidden_size: 4,
+            intermediate_size: 4, num_query_heads: 2, num_key_value_heads: 1,
+            head_dimension: 2, rms_norm_epsilon: 1.0e-5, rope_theta: 10_000.0,
+            situ_beta_gate: 4.0, situ_beta_up: 25.0, tie_word_embeddings: true,
+            use_bias: false, dropout: 0.0, expected_parameter_count: 244,
         };
         SmallLMModel::from_config(config).expect("valid tiny model")
     }
@@ -288,10 +257,7 @@ mod tests {
     #[test]
     fn generation_inputs_reserve_prompt_and_decode_capacity() {
         let model = tiny_model();
-        assert_eq!(
-            validate_generation_inputs(&model, &[1, 2, 3], 4, Some(7)).expect("valid generation"),
-            7
-        );
+        assert_eq!(validate_generation_inputs(&model, &[1, 2, 3], 4, Some(7)).expect("valid generation"), 7);
     }
 
     #[test]
