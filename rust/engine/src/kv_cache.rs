@@ -142,9 +142,7 @@ impl KvCache {
     /// Return whether every layer currently contains zero token positions.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.layers
-            .iter()
-            .all(|layer| layer.sequence_length() == 0)
+        self.layers.iter().all(|layer| layer.sequence_length() == 0)
     }
 
     /// Return whether every layer currently has the same sequence length.
