@@ -98,8 +98,7 @@ pub fn linear_int8(
                 let input_start = row_index * in_features;
                 let input_row = &rounded_input[input_start..input_start + in_features];
                 let weight_start = output_index * in_features;
-                let weight_row =
-                    &dequantized_weight[weight_start..weight_start + in_features];
+                let weight_row = &dequantized_weight[weight_start..weight_start + in_features];
 
                 *output_value = input_row
                     .iter()
