@@ -62,6 +62,16 @@ capture fp32_cached_128x32 \
   cargo run --quiet --release -p smalllm-engine --example cached_benchmark -- \
   "$artifact" 128 32
 
+if [ ! -f "$artifact/model.int8.safetensors" ]; then
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "error: uv is required to generate the INT8 benchmark artifact" >&2
+    exit 127
+  fi
+  capture int8_quantize \
+    bash scripts/quantize_int8.sh \
+    "$artifact/model.safetensors" "$artifact/model.int8.safetensors"
+fi
+
 capture int8_compare \
   cargo run --quiet --release -p smalllm-engine --example int8_compare -- \
   "$artifact"
