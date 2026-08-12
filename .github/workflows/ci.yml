@@ -59,7 +59,7 @@ jobs:
   rust:
     name: Rust + end-to-end inference
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,3 +89,26 @@ jobs:
           SMALLLM_BENCH_MAX_TOKENS: "8"
           SMALLLM_BENCH_ROUNDS: "3"
         run: python3 scripts/benchmark_concurrency.py artifacts/small-lm-8m
+      - name: Install uv for M6 benchmark suite
+        if: github.event_name == 'pull_request' && github.head_ref == 'milestone-6-benchmarks'
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install Python benchmark dependencies
+        if: github.event_name == 'pull_request' && github.head_ref == 'milestone-6-benchmarks'
+        run: uv sync --locked --all-groups
+      - name: Full M6 benchmark suite
+        if: github.event_name == 'pull_request' && github.head_ref == 'milestone-6-benchmarks'
+        env:
+          SMALLLM_BENCH_HTTP: "1"
+          SMALLLM_BENCH_ITERATIONS: "10"
+          SMALLLM_BENCH_MAX_TOKENS: "8"
+          SMALLLM_BENCH_ROUNDS: "3"
+        run: bash scripts/benchmark_suite.sh artifacts/small-lm-8m
+      - name: Upload M6 benchmark outputs
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'milestone-6-benchmarks'
+        uses: actions/upload-artifact@v4
+        with:
+          name: m6-benchmark-results
+          path: benchmarks/runs/
+          if-no-files-found: error
