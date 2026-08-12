@@ -5,10 +5,11 @@
 //! projection, RMSNorm, SiTU-GLU, stable softmax, interleaved RoPE, complete
 //! causal grouped-query attention, transformer blocks, and complete uncached
 //! full-model prefill logits, JAX reference parity, uncached greedy decoding,
-//! paged per-layer KV storage, cache-populating prompt prefill, full-model
-//! cached decoding, deterministic greedy generation, temperature/top-k/top-p
-//! sampling, token-stepped generation sessions, continuous scheduling, and
-//! full-model batched cached decode for independent request state.
+//! paged per-layer KV storage, reusable prompt-prefix snapshots,
+//! cache-populating prompt prefill, full-model cached decoding, deterministic
+//! greedy generation, temperature/top-k/top-p sampling, token-stepped
+//! generation sessions, continuous scheduling, and full-model batched cached
+//! decode for independent request state.
 
 #![deny(unsafe_code)]
 
@@ -30,6 +31,7 @@ pub mod linear;
 pub mod model;
 mod paged_kv;
 pub mod parity;
+pub mod prefix_cache;
 pub mod quantized_attention;
 pub mod quantized_linear;
 pub mod quantized_model;
@@ -56,6 +58,7 @@ pub use error::{EngineError, Result};
 pub use generation_config::GenerationConfig;
 pub use kv_cache::{KvCache, KvCacheConfig};
 pub use model::SmallLMModel;
+pub use prefix_cache::{PrefixCache, PrefixCacheHit, DEFAULT_PREFIX_CACHE_ENTRIES};
 pub use quantized_attention::{QuantizedAttentionWeights, QuantizedGroupedQueryAttention};
 pub use quantized_linear::linear_int8;
 pub use quantized_model::QuantizedDecodeModel;

@@ -2,6 +2,7 @@
 
 use crate::decode_backend::DecodeBackend;
 use crate::error::{EngineError, Result};
+use crate::prefix_cache::PrefixCache;
 use crate::sampler::SamplingConfig;
 use crate::session::{GenerationFinishReason, GenerationSession};
 
@@ -26,11 +27,6 @@ pub struct SchedulerConfig {
 
 impl SchedulerConfig {
     /// Validate scheduler capacity.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-configuration error when the active-sequence limit
-    /// is zero.
     pub fn validate(self) -> Result<()> {
         if self.max_active_sequences == 0 {
             return Err(EngineError::invalid_configuration(
@@ -67,30 +63,24 @@ struct ActiveSequence {
     prefill_token_pending: bool,
 }
 
-/// Request scheduler for continuously admitted generation sessions.
-///
-/// Each call to [`Self::step`] emits or advances every active sequence at most
-/// once. Decode-ready requests are collected into one backend batch while
-/// preserving independent sampler and KV-cache state for every sequence.
+/// Continuous generation scheduler with a shared reusable prompt-prefix cache.
 #[derive(Debug)]
 pub struct GenerationScheduler {
     config: SchedulerConfig,
     active: Vec<ActiveSequence>,
     next_sequence_id: u64,
+    prefix_cache: PrefixCache,
 }
 
 impl GenerationScheduler {
     /// Create an empty scheduler.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-configuration error for zero scheduler capacity.
     pub fn new(config: SchedulerConfig) -> Result<Self> {
         config.validate()?;
         Ok(Self {
             config,
             active: Vec::with_capacity(config.max_active_sequences),
             next_sequence_id: 1,
+            prefix_cache: PrefixCache::default(),
         })
     }
 
@@ -106,23 +96,24 @@ impl GenerationScheduler {
         self.active.len()
     }
 
-    /// Return whether another sequence can be admitted immediately.
+    /// Return whether another request can be admitted.
     #[must_use]
     pub fn has_capacity(&self) -> bool {
         self.active.len() < self.config.max_active_sequences
     }
 
-    /// Admit a prompt as a new request-local generation session.
-    ///
-    /// Prompt prefill happens during admission. The token sampled from the
-    /// final prompt logits is retained and emitted on the next scheduler step.
-    /// A future prefill scheduler can move that work into its own batching
-    /// policy without changing sequence identifiers or decode semantics.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-input error when scheduler capacity is exhausted, or
-    /// propagates model, context, cache, and sampling failures from prefill.
+    /// Return shared prompt-prefix cache statistics and state.
+    #[must_use]
+    pub const fn prefix_cache(&self) -> &PrefixCache {
+        &self.prefix_cache
+    }
+
+    /// Drop all retained prompt-prefix snapshots.
+    pub fn clear_prefix_cache(&mut self) {
+        self.prefix_cache.clear();
+    }
+
+    /// Admit one prompt, reusing the longest cached token prefix when available.
     pub fn admit<M: DecodeBackend + ?Sized>(
         &mut self,
         model: &M,
@@ -138,12 +129,13 @@ impl GenerationScheduler {
             ));
         }
 
-        let session = GenerationSession::prefill(
+        let session = GenerationSession::prefill_with_prefix_cache(
             model,
             prompt_token_ids,
             max_new_tokens,
             eos_token_id,
             sampling,
+            &mut self.prefix_cache,
         )?;
         let sequence_id = SequenceId(self.next_sequence_id);
         self.next_sequence_id = self.next_sequence_id.checked_add(1).ok_or_else(|| {
@@ -161,15 +153,6 @@ impl GenerationScheduler {
     }
 
     /// Emit or advance each active sequence by at most one token.
-    ///
-    /// Newly admitted sequences first emit the token sampled during prompt
-    /// prefill. All already decode-ready sequences are then evaluated through
-    /// one [`DecodeBackend::forward_cached_batch`] call. Finished sequences are
-    /// removed after their terminal token has been reported.
-    ///
-    /// # Errors
-    ///
-    /// Propagates backend, cache, batch-shape, or sampling failures.
     pub fn step<M: DecodeBackend + ?Sized>(&mut self, model: &M) -> Result<Vec<TokenEvent>> {
         let mut event_slots = vec![None; self.active.len()];
         let mut decode_ready = vec![false; self.active.len()];
@@ -296,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_scheduler_reports_capacity() {
+    fn fresh_scheduler_reports_capacity_and_empty_prefix_cache() {
         let scheduler = GenerationScheduler::new(SchedulerConfig {
             max_active_sequences: 4,
         })
@@ -304,6 +287,7 @@ mod tests {
         assert_eq!(scheduler.active_sequence_count(), 0);
         assert!(scheduler.has_capacity());
         assert_eq!(scheduler.config().max_active_sequences, 4);
+        assert!(scheduler.prefix_cache().is_empty());
     }
 
     #[test]

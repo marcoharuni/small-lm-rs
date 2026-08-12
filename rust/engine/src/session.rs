@@ -3,6 +3,7 @@
 use crate::decode_backend::DecodeBackend;
 use crate::error::{EngineError, Result};
 use crate::kv_cache::KvCache;
+use crate::prefix_cache::PrefixCache;
 use crate::sampler::{Sampler, SamplingConfig};
 
 /// Terminal reason for one generation session.
@@ -25,11 +26,7 @@ impl GenerationFinishReason {
     }
 }
 
-/// Request-local state that can advance one decode token at a time.
-///
-/// A session owns its KV cache and sampler. The model remains shared and
-/// immutable, which lets a scheduler interleave independent sessions without
-/// mixing request state.
+/// Request-local generation state with an owned paged KV cache and sampler.
 #[derive(Debug)]
 pub struct GenerationSession {
     cache: KvCache,
@@ -42,14 +39,7 @@ pub struct GenerationSession {
 }
 
 impl GenerationSession {
-    /// Prefill one prompt and create a decode-ready session.
-    ///
-    /// Prefill also samples the first generated token from the final prompt
-    /// logits. Further tokens are produced by calling [`Self::advance`].
-    ///
-    /// # Errors
-    ///
-    /// Returns input, context, model, cache, or sampling errors.
+    /// Prefill a prompt without retaining prefix state beyond this call.
     pub fn prefill<M: DecodeBackend + ?Sized>(
         model: &M,
         prompt_token_ids: &[u32],
@@ -57,17 +47,56 @@ impl GenerationSession {
         eos_token_id: Option<u32>,
         sampling: SamplingConfig,
     ) -> Result<Self> {
-        let requested_length =
-            validate_generation_inputs(model, prompt_token_ids, max_new_tokens, eos_token_id)?;
-        let mut sampler = Sampler::new(sampling)?;
-        let mut cache = model.allocate_kv_cache(requested_length)?;
-        let prefill_logits = model.forward_prefill_with_cache(prompt_token_ids, &mut cache)?;
-        let first_token = sampler.sample(final_logits(
-            &prefill_logits,
-            prompt_token_ids.len(),
-            model.config().vocab_size,
-        )?)?;
+        let mut prefix_cache = PrefixCache::default();
+        Self::prefill_with_prefix_cache(
+            model,
+            prompt_token_ids,
+            max_new_tokens,
+            eos_token_id,
+            sampling,
+            &mut prefix_cache,
+        )
+    }
 
+    /// Prefill using the longest reusable prompt prefix retained in `prefix_cache`.
+    pub fn prefill_with_prefix_cache<M: DecodeBackend + ?Sized>(
+        model: &M,
+        prompt_token_ids: &[u32],
+        max_new_tokens: usize,
+        eos_token_id: Option<u32>,
+        sampling: SamplingConfig,
+        prefix_cache: &mut PrefixCache,
+    ) -> Result<Self> {
+        validate_generation_inputs(model, prompt_token_ids, max_new_tokens, eos_token_id)?;
+        let mut sampler = Sampler::new(sampling)?;
+        let vocab_size = model.config().vocab_size;
+
+        let (mut cache, mut final_row, matched_tokens) = match prefix_cache.lookup(prompt_token_ids)
+        {
+            Some(hit) => (hit.cache, hit.final_logits, hit.matched_tokens),
+            None => {
+                let mut cache = model.allocate_kv_cache(model.config().context_length)?;
+                let logits = model.forward_prefill_with_cache(prompt_token_ids, &mut cache)?;
+                let row = final_logits(&logits, prompt_token_ids.len(), vocab_size)?.to_vec();
+                prefix_cache.insert(prompt_token_ids, &cache, &row);
+                (cache, row, prompt_token_ids.len())
+            }
+        };
+
+        if matched_tokens < prompt_token_ids.len() {
+            for &token_id in &prompt_token_ids[matched_tokens..] {
+                final_row = model.forward_cached_token(token_id, &mut cache)?;
+            }
+            prefix_cache.insert(prompt_token_ids, &cache, &final_row);
+        }
+
+        if final_row.len() != vocab_size {
+            return Err(EngineError::invalid_input(
+                "prefix cache",
+                "cached final-logit row has the wrong vocabulary width",
+            ));
+        }
+        let first_token = sampler.sample(&final_row)?;
         let finish_reason = if eos_token_id == Some(first_token) {
             Some(GenerationFinishReason::Eos)
         } else if max_new_tokens == 1 {
@@ -106,13 +135,13 @@ impl GenerationSession {
         &self.generated_token_ids
     }
 
-    /// Return the token that will be consumed by the next cached decode step.
+    /// Return the token consumed by the next cached decode step.
     #[must_use]
     pub const fn next_input_token(&self) -> Option<u32> {
         self.next_input_token
     }
 
-    /// Return the number of prompt/generated input positions currently cached.
+    /// Return the number of input positions represented by the owned cache.
     #[must_use]
     pub fn cached_sequence_length(&self) -> usize {
         self.cache.sequence_length()
@@ -144,10 +173,8 @@ impl GenerationSession {
                 "cannot accept logits for a finished session",
             ));
         }
-
         let next_token = self.sampler.sample(logits)?;
         self.generated_token_ids.push(next_token);
-
         if self.eos_token_id == Some(next_token) {
             self.finish_reason = Some(GenerationFinishReason::Eos);
             self.next_input_token = None;
@@ -161,24 +188,13 @@ impl GenerationSession {
     }
 
     /// Advance this session by exactly one cached decode step.
-    ///
-    /// The returned token is appended to [`Self::generated_token_ids`].
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-input error when called after completion, or
-    /// propagates model, cache, and sampling errors.
     pub fn advance<M: DecodeBackend + ?Sized>(&mut self, model: &M) -> Result<u32> {
         let input_token = self.pending_decode_token()?;
         let logits = model.forward_cached_token(input_token, &mut self.cache)?;
         self.accept_logits(&logits)
     }
 
-    /// Consume a completed session into generated tokens and finish reason.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-input error if generation is still running.
+    /// Consume a finished session into generated tokens and its finish reason.
     pub fn into_parts(self) -> Result<(Vec<u32>, GenerationFinishReason)> {
         let finish_reason = self.finish_reason.ok_or_else(|| {
             EngineError::invalid_input(
@@ -216,7 +232,6 @@ fn validate_generation_inputs<M: DecodeBackend + ?Sized>(
             ));
         }
     }
-
     let requested_length = prompt_token_ids
         .len()
         .checked_add(max_new_tokens)
