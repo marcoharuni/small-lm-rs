@@ -228,11 +228,7 @@ mod tests {
     fn truncate_releases_trailing_pages() {
         let mut cache = PagedLayerKvCache::new(1, 16, 4).expect("valid cache");
         cache
-            .append(
-                &[1.0, 2.0, 3.0, 4.0, 5.0],
-                &[6.0, 7.0, 8.0, 9.0, 10.0],
-                5,
-            )
+            .append(&[1.0, 2.0, 3.0, 4.0, 5.0], &[6.0, 7.0, 8.0, 9.0, 10.0], 5)
             .expect("append");
         assert_eq!(cache.allocated_pages(), 2);
 
